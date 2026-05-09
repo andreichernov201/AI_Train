@@ -1,0 +1,10 @@
+path: dataset
+train: images/train
+val: images/val
+
+nc: 4
+names:
+  - body
+  - autocoupler
+  - axlebox
+  - bogie

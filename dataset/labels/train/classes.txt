@@ -1,0 +1,4 @@
+body
+autocoupler
+axlebox
+bogie

@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+.idea/
+.vscode/
+*.swp
+
+# Secrets
+.env
+.env.*
+
+# Logs
+*.log
+
+# Model / training artifacts (обычно большие и воспроизводимые)
+runs/
+
+# Frontend deps (если появятся)
+node_modules/
+
+# IMPORTANT:
+# - Картинки (.jpg/.png/...) и разметка/аннотации (.txt/.json/.xml/.html/.md) НЕ игнорируются.
+

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Train</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="window">
+  <div class="app">
+
+    <!-- Левая панель -->
+    <div class="sidebar left">
+      <h2>AI Train</h2>
+      <p class="dev">Developed by andreichernov200</p>
+      
+      <button id="upload-btn">Загрузить фото</button>
+      <button id="clear-btn">Очистить</button>
+      <button class="primary" id="run-btn">Запустить распознавание</button>
+
+      <div class="spacer"></div>
+
+      <button id="download-image-btn">Скачать фото (.jpg)</button>
+      <button id="download-yolo-btn">Скачать разметку (.txt)</button>
+      <button id="download-json-btn">Экспорт JSON</button>
+
+      <!-- Скрытый input для выбора файла -->
+      <input type="file" id="file-input" accept="image/*" style="display: none;">
+    </div>
+
+    <!-- Центр -->
+    <div class="main">
+      <div class="image-frame" id="image-frame">
+        <span id="placeholder-text">Изображение</span>
+        <div class="image-stack" id="image-stack">
+          <img id="preview-image" alt="Загруженное изображение">
+          <canvas id="overlay-canvas"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Правая панель -->
+    <div class="sidebar right">
+      <h3>Найденные узлы локомотива</h3>
+      <p>Всего объектов: <span id="total-objects">0</span></p>
+      <div class="confidence-filter">
+        <label for="confidence-filter-range">
+          Уверенность: <span id="confidence-filter-value">0.00</span>+
+        </label>
+        <input
+          type="range"
+          id="confidence-filter-range"
+          min="0"
+          max="1"
+          step="0.01"
+          value="0"
+        />
+      </div>
+      <div id="groups-root"></div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+<script src="/static/scripts/app.js"></script>
+</html>
+
+<!-- python -m uvicorn server:app --reload --host 127.0.0.1 --port 8000 -->
+<!-- http://127.0.0.1:8000/ -->
