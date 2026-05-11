@@ -9,33 +9,227 @@
 
 <div class="window">
   <div class="app">
+    <header class="app-header" role="banner">
+      <div class="app-header-left">
+        <span class="app-header-title">AI Train</span>
+        <span class="app-header-dev">Developed by andreichernov200</span>
+        <span id="workspace-save-status" class="workspace-save-status" aria-live="polite"></span>
+      </div>
+      <div class="app-header-progress" aria-label="Прогресс разметки">
+        <div class="header-stat-row">
+          <span class="header-stat-label">Reviewed</span>
+          <span class="header-stat-value" id="header-reviewed-line">0 / 0</span>
+        </div>
+        <div class="header-stat-row">
+          <span class="header-stat-label">Processed</span>
+          <span class="header-stat-value" id="header-processed-line">0 / 0</span>
+        </div>
+        <div
+          class="header-progress-track"
+          id="header-progress-track"
+          role="progressbar"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="0"
+          aria-label="Доля обработанных изображений"
+        >
+          <div class="header-progress-fill" id="header-progress-fill"></div>
+        </div>
+        <div class="header-failed-row" id="header-failed-row" hidden>
+          Failed: <span id="header-failed-count">0</span>
+        </div>
+      </div>
+    </header>
 
+    <div class="app-columns">
     <!-- Левая панель -->
     <div class="sidebar left">
-      <h2>AI Train</h2>
-      <p class="dev">Developed by andreichernov200</p>
-      
-      <button id="upload-btn">Загрузить фото</button>
+      <button id="upload-btn">Загрузить фото / ZIP</button>
       <button id="clear-btn">Очистить</button>
       <button class="primary" id="run-btn">Запустить распознавание</button>
 
-      <div class="spacer"></div>
+      <section class="batch-images-panel" aria-label="Изображения в batch">
+        <div class="batch-images-panel-head">
+          <h3 class="batch-images-heading">Изображения</h3>
+        </div>
+        <div class="batch-list-filters">
+          <label class="batch-filter-label" for="batch-status-filter">Статус</label>
+          <select id="batch-status-filter" class="batch-status-select">
+            <option value="all">Все</option>
+            <option value="idle">Не обработано</option>
+            <option value="needs_review">Нужно проверить</option>
+            <option value="reviewed">Проверено</option>
+            <option value="empty">Пустые</option>
+            <option value="failed">Ошибки</option>
+            <option value="skipped">Пропущенные</option>
+          </select>
+        </div>
+        <div id="batch-image-list-root" class="batch-image-list"></div>
+      </section>
 
-      <button id="download-image-btn">Скачать фото (.jpg)</button>
-      <button id="download-yolo-btn">Скачать разметку (.txt)</button>
-      <button id="download-json-btn">Экспорт JSON</button>
+      <div class="sidebar-left-footer">
+        <div class="export-dropdown-wrap" id="export-dropdown-wrap">
+          <button
+            type="button"
+            id="export-menu-toggle"
+            class="export-menu-toggle"
+            aria-expanded="false"
+            aria-haspopup="menu"
+            aria-controls="export-menu-panel"
+          >
+            Экспорт
+            <span class="export-menu-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div id="export-menu-panel" class="export-menu-panel" hidden role="menu">
+            <div class="export-menu-group-label">Текущий кадр</div>
+            <button type="button" role="menuitem" class="export-menu-item" data-export="current-jpg">
+              Фото с разметкой (.jpg)
+            </button>
+            <button type="button" role="menuitem" class="export-menu-item" data-export="current-yolo">
+              Разметка YOLO (.txt)
+            </button>
+            <button type="button" role="menuitem" class="export-menu-item" data-export="current-json">
+              Экспорт JSON
+            </button>
+            <div class="export-menu-group-label">Весь батч</div>
+            <button type="button" role="menuitem" class="export-menu-item" data-export="batch-png-clean">
+              PNG ZIP без разметки
+            </button>
+            <button type="button" role="menuitem" class="export-menu-item" data-export="batch-png-marked">
+              PNG ZIP с разметкой
+            </button>
+            <button type="button" role="menuitem" class="export-menu-item" data-export="batch-yolo-zip">
+              YOLO TXT (ZIP)
+            </button>
+            <button type="button" role="menuitem" class="export-menu-item" data-export="batch-project-zip">
+              Full Project ZIP
+            </button>
+          </div>
+        </div>
+      </div>
 
-      <!-- Скрытый input для выбора файла -->
-      <input type="file" id="file-input" accept="image/*" style="display: none;">
+      <!-- Скрытый input: один или несколько изображений -->
+      <input type="file" id="file-input" accept="image/*,.zip,application/zip" multiple style="display: none;">
     </div>
 
     <!-- Центр -->
     <div class="main">
-      <div class="image-frame" id="image-frame">
-        <span id="placeholder-text">Изображение</span>
-        <div class="image-stack" id="image-stack">
-          <img id="preview-image" alt="Загруженное изображение">
-          <canvas id="overlay-canvas"></canvas>
+      <div class="main-viewer">
+        <div class="canvas-area-bar">
+          <div class="canvas-area-bar-inner">
+            <div class="canvas-area-bar-start">
+              <div
+                class="editor-mode-switch"
+                role="radiogroup"
+                aria-label="Режим редактора"
+              >
+                <button
+                  type="button"
+                  id="editor-mode-review"
+                  class="editor-mode-option is-active"
+                  role="radio"
+                  aria-checked="true"
+                >
+                  <span class="editor-mode-icon" aria-hidden="true">🔒</span>
+                  <span class="editor-mode-text">Review mode</span>
+                </button>
+                <button
+                  type="button"
+                  id="editor-mode-edit"
+                  class="editor-mode-option"
+                  role="radio"
+                  aria-checked="false"
+                >
+                  <span class="editor-mode-icon" aria-hidden="true">🔓</span>
+                  <span class="editor-mode-text">Edit mode</span>
+                </button>
+              </div>
+            </div>
+            <div class="canvas-area-bar-center">
+              <div class="canvas-area-bar-counters">
+                <div
+                  id="class-chips-root"
+                  class="class-chips-strip"
+                  aria-label="Классы: сумма bbox по всему батчу"
+                ></div>
+              </div>
+            </div>
+            <div class="canvas-area-bar-tools">
+              <div id="editor-tools-bar" class="editor-tools-bar" hidden>
+                <span class="editor-tools-heading">TOOLS</span>
+                <div class="editor-tools-toggle" role="group" aria-label="Инструмент">
+                  <button
+                    type="button"
+                    id="editor-tool-select"
+                    class="editor-tool-chip is-active"
+                  >
+                    Select
+                  </button>
+                  <button type="button" id="editor-tool-add" class="editor-tool-chip">
+                    Add box
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="image-frame" id="image-frame">
+          <span id="placeholder-text">Изображение</span>
+          <div class="image-stack" id="image-stack">
+            <img id="preview-image" alt="Загруженное изображение">
+            <canvas id="overlay-canvas"></canvas>
+          </div>
+        </div>
+        <div class="viewer-toolbar" role="toolbar" aria-label="Кадр и навигация">
+          <div class="viewer-toolbar-row viewer-toolbar-row--nav">
+            <button
+              type="button"
+              id="viewer-prev"
+              class="viewer-nav-btn"
+              disabled
+              title="Предыдущий кадр (←)"
+              aria-label="Предыдущий кадр"
+            >
+              <span class="viewer-nav-btn-icon" aria-hidden="true">←</span>
+              <span class="viewer-nav-btn-text">Назад</span>
+            </button>
+            <div class="viewer-meta" aria-live="polite">
+              <span id="viewer-filename" class="viewer-filename"></span>
+              <span id="viewer-counter" class="viewer-counter">—</span>
+            </div>
+            <button
+              type="button"
+              id="viewer-next"
+              class="viewer-nav-btn"
+              disabled
+              title="Следующий кадр (→)"
+              aria-label="Следующий кадр"
+            >
+              <span class="viewer-nav-btn-text">Вперёд</span>
+              <span class="viewer-nav-btn-icon" aria-hidden="true">→</span>
+            </button>
+          </div>
+          <div class="viewer-toolbar-row viewer-toolbar-row--actions">
+            <button
+              type="button"
+              id="skip-image-btn"
+              class="viewer-action-btn viewer-action-btn--secondary"
+              disabled
+              title="Не размечать этот кадр"
+            >
+              Пропустить
+            </button>
+            <button
+              type="button"
+              id="mark-reviewed-btn"
+              class="viewer-action-btn viewer-action-btn--primary"
+              disabled
+              title="Отметить кадр проверенным"
+            >
+              Проверено
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -44,26 +238,104 @@
     <div class="sidebar right">
       <h3>Найденные узлы локомотива</h3>
       <p>Всего объектов: <span id="total-objects">0</span></p>
-      <div class="confidence-filter">
-        <label for="confidence-filter-range">
-          Уверенность: <span id="confidence-filter-value">0.00</span>+
-        </label>
-        <input
-          type="range"
-          id="confidence-filter-range"
-          min="0"
-          max="1"
-          step="0.01"
-          value="0"
-        />
+      <div class="confidence-filter" aria-label="Порог уверенности модели">
+        <div class="confidence-filter-head">
+          <label class="confidence-filter-title" for="confidence-filter-range">
+            Мин. уверенность
+          </label>
+          <output
+            class="confidence-filter-value"
+            id="confidence-filter-value"
+            for="confidence-filter-range"
+            >0.00</output>
+        </div>
+        <p class="confidence-filter-hint">
+          Показывать детекции с <span class="confidence-filter-hint-math">conf ≥</span> порога
+        </p>
+        <div class="confidence-filter-track">
+          <input
+            type="range"
+            id="confidence-filter-range"
+            class="confidence-filter-range"
+            min="0"
+            max="1"
+            step="0.01"
+            value="0"
+          />
+          <div class="confidence-filter-scale" aria-hidden="true">
+            <span>0</span>
+            <span>0.5</span>
+            <span>1.0</span>
+          </div>
+        </div>
+        <div class="confidence-filter-presets" role="group" aria-label="Быстрый порог">
+          <button type="button" class="confidence-preset" data-confidence="0">0</button>
+          <button type="button" class="confidence-preset" data-confidence="0.25">0.25</button>
+          <button type="button" class="confidence-preset" data-confidence="0.5">0.5</button>
+          <button type="button" class="confidence-preset" data-confidence="0.75">0.75</button>
+          <button type="button" class="confidence-preset" data-confidence="1">1</button>
+        </div>
       </div>
+
+      <section class="inspector-root-wrap" aria-label="Инспектор">
+        <div id="inspector-root"></div>
+      </section>
+
       <div id="groups-root"></div>
     </div>
 
+    </div>
+  </div>
+</div>
+
+<div
+  id="export-summary-overlay"
+  class="export-summary-overlay"
+  hidden
+  role="presentation"
+>
+  <div
+    class="export-summary-dialog"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="export-summary-title"
+    tabindex="-1"
+  >
+    <h3 id="export-summary-title" class="export-summary-title">Экспорт</h3>
+    <p id="export-summary-subtitle" class="export-summary-subtitle"></p>
+    <div id="export-summary-body" class="export-summary-body"></div>
+    <div class="export-summary-actions">
+      <button type="button" id="export-summary-cancel">Отмена</button>
+      <button type="button" class="primary" id="export-summary-confirm">
+        Экспортировать
+      </button>
+    </div>
+  </div>
+</div>
+
+<div
+  id="import-summary-overlay"
+  class="import-summary-overlay"
+  hidden
+  role="presentation"
+>
+  <div
+    class="import-summary-dialog"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="import-summary-title"
+    tabindex="-1"
+  >
+    <h3 id="import-summary-title" class="import-summary-title">Сводка импорта</h3>
+    <div id="import-summary-body" class="import-summary-body"></div>
+    <div class="import-summary-actions">
+      <button type="button" class="primary" id="import-summary-close">Закрыть</button>
+    </div>
   </div>
 </div>
 
 </body>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="/static/scripts/app.js"></script>
 </html>
 
