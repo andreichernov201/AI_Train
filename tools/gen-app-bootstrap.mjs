@@ -1,6 +1,9 @@
 /**
  * Собирает frontend/scripts/app/bootstrap.js из frontend/scripts/app/legacy-monolith.js:
  * убирает IIFE, выносит DOM в параметр refs, вырезает блоки, перенесённые в модули.
+ *
+ * Диапазоны — 1-based inclusive, в координатах legacy-monolith.js ДО любых вырезаний.
+ * Применяются по возрастанию start с поправкой offset (удаление сверху вниз).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -15,25 +18,33 @@ const outPath = path.join(root, "frontend", "scripts", "app", "bootstrap.js");
 const raw = fs.readFileSync(srcPath, "utf8");
 const lines = raw.split(/\r?\n/);
 
-/** 1-based inclusive ranges to remove (original file line numbers) */
+/**
+ * Удалить из монолита то, что уже импортируется в bootstrap:
+ * [66,272] — константы/классы/DOM/guard + newBatchId/newImageItemId (constants, dom-refs, ids)
+ * [308,336] — resetTrainClassesToDefault, trainClassNamesMatchFixedSet, applyTrainClassOrderFromNames (train-classes)
+ * [886,895] — локальный COLORS (colors.js)
+ * [2795,2865] — JSDoc + stripYamlQuotes … findProjectJsonEntry (yaml-zip.js)
+ */
 const ranges = [
-  [2522, 2591],
-  [1137, 1137],
-  [927, 935],
-  [843, 852],
-  [329, 333],
-  [296, 324],
-  [251, 260],
-  [93, 248],
-  [66, 91],
+  [66, 272],
+  [308, 336],
+  [886, 895],
+  [2795, 2865],
 ];
-ranges.sort((a, b) => b[0] - a[0]);
+ranges.sort((a, b) => a[0] - b[0]);
 
 const L = [...lines];
+let removed = 0;
 for (const [a, b] of ranges) {
-  const start = a - 1;
+  const start = a - 1 - removed;
   const count = b - a + 1;
+  if (start < 0 || start + count > L.length) {
+    throw new Error(
+      `gen-app-bootstrap: invalid range [${a},${b}] after offset ${removed} (len=${L.length})`
+    );
+  }
   L.splice(start, count);
+  removed += count;
 }
 
 if (!L[0]?.trim().startsWith("(() => {")) {
@@ -65,7 +76,6 @@ const header = `import {
   DETECT_ALL_CONCURRENCY,
   DETECT_API_FETCH_TIMEOUT_MS,
   DETECT_ALL_BATCH_NAV_THROTTLE_MS,
-  IMPORT_SUMMARY_NAME_PREVIEW,
 } from "./constants.js";
 import { COLORS } from "./colors.js";
 import {
@@ -126,7 +136,8 @@ export function bootstrap(refs) {
     viewerFilename,
     batchImageListRoot,
     batchStatusFilter,
-    totalObjectsEl,
+    batchSortToggle,
+    batchSortMenu,
     groupsRoot,
     inspectorRoot,
     confFilterRange,
@@ -136,6 +147,9 @@ export function bootstrap(refs) {
     editorToolsBar,
     editorToolSelectBtn,
     editorToolAddBtn,
+    hotkeysHelpBtn,
+    hotkeysHelpOverlay,
+    hotkeysHelpClose,
     classChipsRoot,
   } = refs;
 

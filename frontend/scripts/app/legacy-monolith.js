@@ -169,9 +169,11 @@
   const batchImageListRoot = document.getElementById("batch-image-list-root");
   /** @type {HTMLSelectElement|null} */
   const batchStatusFilter = document.getElementById("batch-status-filter");
-
+  /** @type {HTMLButtonElement|null} */
+  const batchSortToggle = document.getElementById("batch-sort-toggle");
   /** @type {HTMLElement|null} */
-  const totalObjectsEl = document.getElementById("total-objects");
+  const batchSortMenu = document.getElementById("batch-sort-menu");
+
   /** @type {HTMLElement|null} */
   const groupsRoot = document.getElementById("groups-root");
   /** @type {HTMLElement|null} */
@@ -193,6 +195,12 @@
   const editorToolAddBtn = document.getElementById("editor-tool-add");
   /** @type {HTMLElement|null} */
   const classChipsRoot = document.getElementById("class-chips-root");
+  /** @type {HTMLButtonElement|null} */
+  const hotkeysHelpBtn = document.getElementById("hotkeys-help-btn");
+  /** @type {HTMLElement|null} */
+  const hotkeysHelpOverlay = document.getElementById("hotkeys-help-overlay");
+  /** @type {HTMLButtonElement|null} */
+  const hotkeysHelpClose = document.getElementById("hotkeys-help-close");
 
   if (
     !uploadBtn ||
@@ -216,7 +224,6 @@
     !headerProgressFill ||
     !headerFailedRow ||
     !headerFailedCount ||
-    !totalObjectsEl ||
     !groupsRoot ||
     !inspectorRoot ||
     !confFilterRange ||
@@ -237,12 +244,17 @@
     !viewerFilename ||
     !batchImageListRoot ||
     !batchStatusFilter ||
+    !batchSortToggle ||
+    !batchSortMenu ||
     !editorModeReviewBtn ||
     !editorModeEditBtn ||
     !editorToolsBar ||
     !editorToolSelectBtn ||
     !editorToolAddBtn ||
-    !classChipsRoot
+    !classChipsRoot ||
+    !hotkeysHelpBtn ||
+    !hotkeysHelpOverlay ||
+    !hotkeysHelpClose
   ) {
     return;
   }
@@ -347,6 +359,15 @@
   let workspaceAutosaveTimer = null;
   let workspaceAutosaveGeneration = 0;
 
+  const IMAGE_UNDO_LIMIT = 80;
+  /** @type {any[]} */
+  const imageUndoStack = [];
+  /** @type {any[]} */
+  const imageRedoStack = [];
+  /** Класс для следующего bbox (горячие клавиши 1–4), сбрасывается при смене кадра. */
+  /** @type {string|null} */
+  let hotkeyPreferredNewBboxClassName = null;
+
   /**
    * Временное состояние drag на overlay (addBox / move / resize bbox).
    * @type {null | {
@@ -410,13 +431,13 @@
       "is-failed"
     );
     if (state === "saving") {
-      workspaceSaveStatus.textContent = "Saving...";
+      workspaceSaveStatus.textContent = "Сохранение…";
       workspaceSaveStatus.classList.add("is-saving");
     } else if (state === "saved") {
-      workspaceSaveStatus.textContent = "Saved";
+      workspaceSaveStatus.textContent = "Сохранено";
       workspaceSaveStatus.classList.add("is-saved");
     } else if (state === "failed") {
-      workspaceSaveStatus.textContent = "Save failed";
+      workspaceSaveStatus.textContent = "Ошибка сохранения";
       workspaceSaveStatus.classList.add("is-failed");
     } else {
       workspaceSaveStatus.textContent = "";
@@ -772,7 +793,29 @@
 
   /** @param {BatchImageItem["detections"][0]} d */
   function detectionSourceLabel(d) {
-    return d.source === "human" ? "human" : "model";
+    return d.source === "human" ? "вручную" : "модель";
+  }
+
+  /** @param {ImageStatus|string} status */
+  function formatImageStatusForUi(status) {
+    switch (status) {
+      case "idle":
+        return "не обработано";
+      case "queued":
+        return "в очереди";
+      case "processing":
+        return "распознавание";
+      case "detected":
+        return "распознано";
+      case "empty":
+        return "пусто";
+      case "failed":
+        return "ошибка";
+      case "skipped":
+        return "пропущено";
+      default:
+        return String(status);
+    }
   }
 
   /** @param {[number,number,number,number]} box */
@@ -910,7 +953,11 @@
     if (!root) {
       root = document.createElement("div");
       root.id = "workspace-toast-root";
+      root.setAttribute("aria-live", "polite");
       document.body.appendChild(root);
+    }
+    while (root.children.length >= 6) {
+      root.firstElementChild?.remove();
     }
     const t = document.createElement("div");
     t.className = `workspace-toast workspace-toast--${type}`;
@@ -1020,13 +1067,13 @@
 
   /** @param {{ total:number, exportable:number, skipped:number, reasons: Record<string, number> }} batchSummary */
   function appendStandardSkipReasons(ul, batchSummary) {
-    appendExportReasonLine(ul, "empty", batchSummary.reasons.empty);
-    appendExportReasonLine(ul, "skipped", batchSummary.reasons.skipped);
-    appendExportReasonLine(ul, "failed", batchSummary.reasons.failed);
-    appendExportReasonLine(ul, "no bbox", batchSummary.reasons.noBbox);
+    appendExportReasonLine(ul, "пустые кадры", batchSummary.reasons.empty);
+    appendExportReasonLine(ul, "пропущено", batchSummary.reasons.skipped);
+    appendExportReasonLine(ul, "ошибки", batchSummary.reasons.failed);
+    appendExportReasonLine(ul, "нет bbox", batchSummary.reasons.noBbox);
     appendExportReasonLine(
       ul,
-      "не готовы (idle / очередь / распознавание)",
+      "не готовы (ожидание / очередь / распознавание)",
       batchSummary.reasons.pending
     );
     appendExportReasonLine(
@@ -1134,7 +1181,113 @@
     }
   }
 
-  const IMPORT_SUMMARY_NAME_PREVIEW = 14;
+  function openHotkeysHelp() {
+    closeBatchSortMenu();
+    closeExportMenu();
+    hotkeysHelpOverlay.hidden = false;
+    hotkeysHelpClose.focus();
+  }
+
+  function closeHotkeysHelp() {
+    hotkeysHelpOverlay.hidden = true;
+    hotkeysHelpBtn.focus();
+  }
+
+  function cloneImageWorkspaceForUndo() {
+    const im = currentImageItem();
+    if (!im) return null;
+    return {
+      detections: im.detections.map((d) => ({
+        id: d.id,
+        cls_id: d.cls_id,
+        cls_name: d.cls_name,
+        conf: d.conf,
+        box: /** @type {[number, number, number, number]} */ ([
+          d.box[0],
+          d.box[1],
+          d.box[2],
+          d.box[3],
+        ]),
+        source: d.source,
+      })),
+      selectedDetectionId: im.panel.selectedDetectionId,
+      edited: im.edited,
+      reviewed: im.reviewed,
+      status: im.status,
+      detEnabled: Array.from(im.panel.detEnabled.entries()),
+      categoryState: Array.from(im.panel.categoryState.entries()).map(([k, v]) => [
+        k,
+        { enabled: v.enabled, collapsed: v.collapsed },
+      ]),
+    };
+  }
+
+  function applyImageWorkspaceUndoSnapshot(snap) {
+    const im = currentImageItem();
+    if (!im || !snap) return;
+    im.detections = snap.detections.map((d, i) => normalizeDetection(d, i));
+    im.panel.selectedDetectionId = snap.selectedDetectionId;
+    im.edited = snap.edited;
+    im.reviewed = snap.reviewed;
+    im.status = snap.status;
+    im.panel.detEnabled = new Map(snap.detEnabled);
+    im.panel.categoryState = new Map(
+      snap.categoryState.map(([k, v]) => [k, { ...v }])
+    );
+    reconcileSelectedDetectionWithFilters(im);
+    touchBatch();
+    scheduleWorkspaceAutosave(0);
+    updateBatchNavUi();
+    buildRightPanel();
+    draw();
+  }
+
+  function pushUndoCheckpoint() {
+    if (!currentImageItem()) return;
+    const snap = cloneImageWorkspaceForUndo();
+    imageUndoStack.push(snap);
+    if (imageUndoStack.length > IMAGE_UNDO_LIMIT) imageUndoStack.shift();
+    imageRedoStack.length = 0;
+  }
+
+  function undoImageWorkspace() {
+    if (!imageUndoStack.length) return false;
+    const prev = imageUndoStack.pop();
+    const cur = cloneImageWorkspaceForUndo();
+    if (cur) imageRedoStack.push(cur);
+    applyImageWorkspaceUndoSnapshot(prev);
+    return true;
+  }
+
+  function redoImageWorkspace() {
+    if (!imageRedoStack.length) return false;
+    const next = imageRedoStack.pop();
+    const cur = cloneImageWorkspaceForUndo();
+    if (cur) imageUndoStack.push(cur);
+    applyImageWorkspaceUndoSnapshot(next);
+    return true;
+  }
+
+  function cancelActiveEditorTool() {
+    if (!editorModeIsEdit()) return;
+    if (pointerInteraction) {
+      pointerInteraction = null;
+      clearAddBoxCrosshairOverlayPx();
+      touchBatch();
+      buildInspector();
+      draw();
+      return;
+    }
+    if (batchState.settings.editorTool === "addBox") {
+      batchState.settings.editorTool = "select";
+      clearAddBoxCrosshairOverlayPx();
+      touchBatch();
+      syncEditorChrome();
+      buildInspector();
+      buildRightPanel();
+      draw();
+    }
+  }
 
   /** @param {HTMLElement} body @param {string} text */
   function appendImportSummaryTextRow(body, text) {
@@ -1153,7 +1306,7 @@
   }
 
   /** @param {HTMLElement} body @param {string[]} names @param {number} [max] */
-  function appendImportSummaryNameList(body, names, max = IMPORT_SUMMARY_NAME_PREVIEW) {
+  function appendImportSummaryNameList(body, names, max = 14) {
     if (!names.length) return;
     const ul = document.createElement("ul");
     ul.className = "export-summary-list";
@@ -1270,11 +1423,11 @@
     if (!im.blob || im.blob.size === 0)
       return { ok: false, detail: "Нет файла изображения." };
     if (im.status === "skipped")
-      return { ok: false, detail: "Кадр со статусом skipped не экспортируется." };
+      return { ok: false, detail: "Кадр со статусом «пропущено» не экспортируется." };
     if (im.status === "failed")
-      return { ok: false, detail: "Кадр со статусом failed не экспортируется." };
+      return { ok: false, detail: "Кадр со статусом «ошибка» не экспортируется." };
     if (im.status === "empty")
-      return { ok: false, detail: "Кадр со статусом empty не экспортируется." };
+      return { ok: false, detail: "Кадр со статусом «пусто» не экспортируется." };
     if (
       im.status === "idle" ||
       im.status === "queued" ||
@@ -1283,7 +1436,7 @@
       return {
         ok: false,
         detail:
-          "Кадр ещё не готов (idle / очередь / распознавание) — дождитесь обработки.",
+          "Кадр ещё не готов (ожидание / очередь / распознавание) — дождитесь обработки.",
       };
     }
     if (!Array.isArray(im.detections) || !im.detections.length) {
@@ -1567,14 +1720,17 @@
   async function exportBatchPngZip(withMarkup) {
     if (pngZipExportInFlight) return;
     if (typeof JSZip !== "function") {
-      alert("JSZip не загружен. Обновите страницу и попробуйте снова.");
+      showToast("JSZip не загружен. Обновите страницу и попробуйте снова.", {
+        type: "error",
+        durationMs: 6000,
+      });
       return;
     }
 
     const items = batchState.images.filter(isImageValidForPngZipExport);
     if (!items.length) {
       showToast(
-        "Нет кадров для экспорта: нужны bbox и статус после распознавания (не idle / очередь / ошибка / пропуск).",
+        "Нет кадров для экспорта: нужны bbox и статус после распознавания (не ожидание / очередь / ошибка / пропуск).",
         { type: "warning", durationMs: 4200 }
       );
       return;
@@ -1613,8 +1769,9 @@
       );
     } catch (err) {
       console.warn("[export png zip]", err);
-      alert(
-        `Ошибка экспорта ZIP: ${err && err.message ? err.message : String(err)}`
+      showToast(
+        `Ошибка экспорта ZIP: ${err && err.message ? err.message : String(err)}`,
+        { type: "error", durationMs: 6500 }
       );
     } finally {
       pngZipExportInFlight = false;
@@ -1699,14 +1856,17 @@
   async function exportBatchYoloTxtZip() {
     if (yoloTxtZipExportInFlight) return;
     if (typeof JSZip !== "function") {
-      alert("JSZip не загружен. Обновите страницу и попробуйте снова.");
+      showToast("JSZip не загружен. Обновите страницу и попробуйте снова.", {
+        type: "error",
+        durationMs: 6000,
+      });
       return;
     }
 
     const items = batchState.images.filter(isImageValidForPngZipExport);
     if (!items.length) {
       showToast(
-        "Нет кадров для экспорта YOLO: нужны bbox и статус после распознавания (не idle / очередь / ошибка / пропуск).",
+        "Нет кадров для экспорта YOLO: нужны bbox и статус после распознавания (не ожидание / очередь / ошибка / пропуск).",
         { type: "warning", durationMs: 4200 }
       );
       return;
@@ -1742,8 +1902,9 @@
       );
     } catch (err) {
       console.warn("[export yolo txt zip]", err);
-      alert(
-        `Ошибка экспорта ZIP: ${err && err.message ? err.message : String(err)}`
+      showToast(
+        `Ошибка экспорта ZIP: ${err && err.message ? err.message : String(err)}`,
+        { type: "error", durationMs: 6500 }
       );
     } finally {
       yoloTxtZipExportInFlight = false;
@@ -1803,14 +1964,17 @@
   async function exportFullProjectZip() {
     if (fullProjectZipExportInFlight) return;
     if (typeof JSZip !== "function") {
-      alert("JSZip не загружен. Обновите страницу и попробуйте снова.");
+      showToast("JSZip не загружен. Обновите страницу и попробуйте снова.", {
+        type: "error",
+        durationMs: 6000,
+      });
       return;
     }
 
     const items = batchState.images.filter(isImageValidForPngZipExport);
     if (!items.length) {
       showToast(
-        "Нет кадров для экспорта: нужны bbox и статус после распознавания (не idle / очередь / ошибка / пропуск).",
+        "Нет кадров для экспорта: нужны bbox и статус после распознавания (не ожидание / очередь / ошибка / пропуск).",
         { type: "warning", durationMs: 4200 }
       );
       return;
@@ -1929,8 +2093,9 @@
       );
     } catch (err) {
       console.warn("[export full project zip]", err);
-      alert(
-        `Ошибка экспорта ZIP: ${err && err.message ? err.message : String(err)}`
+      showToast(
+        `Ошибка экспорта ZIP: ${err && err.message ? err.message : String(err)}`,
+        { type: "error", durationMs: 6500 }
       );
     } finally {
       fullProjectZipExportInFlight = false;
@@ -1974,7 +2139,7 @@
       );
     }
     if (!resp.ok || !data) {
-      throw new Error(data?.error || "Detect failed");
+      throw new Error(data?.error || "Распознавание не удалось");
     }
     return data;
   }
@@ -2104,6 +2269,111 @@
     reconcileSelectionAfterListFilterChange();
   }
 
+  function closeBatchSortMenu() {
+    if (batchSortMenu) batchSortMenu.hidden = true;
+    batchSortToggle?.setAttribute("aria-expanded", "false");
+  }
+
+  /** @param {BatchImageItem} im */
+  function meanDetectionConfidence(im) {
+    const d = im.detections;
+    if (!Array.isArray(d) || !d.length) return -1;
+    let s = 0;
+    for (const x of d) s += Math.max(0, Math.min(1, Number(x.conf) || 0));
+    return s / d.length;
+  }
+
+  /** @param {BatchImageItem} im */
+  function minDetectionConfidence(im) {
+    const d = im.detections;
+    if (!Array.isArray(d) || !d.length) return -1;
+    let m = 1;
+    for (const x of d) m = Math.min(m, Math.max(0, Math.min(1, Number(x.conf) || 0)));
+    return m;
+  }
+
+  /** @param {BatchImageItem} im @returns {number} 0..1 доля «слишком маленьких» bbox */
+  function tinyBoxFraction(im) {
+    const d = im.detections;
+    if (!Array.isArray(d) || !d.length || !im.width || !im.height) return 0;
+    const minShort = Math.max(
+      MIN_BOX_SIDE * 3,
+      Math.min(im.width, im.height) * 0.012
+    );
+    let bad = 0;
+    for (const det of d) {
+      const [x1, y1, x2, y2] = det.box;
+      const w = Math.abs(x2 - x1);
+      const h = Math.abs(y2 - y1);
+      if (Math.min(w, h) < minShort) bad++;
+    }
+    return bad / d.length;
+  }
+
+  /**
+   * Выше — «лучше» разметка (для сортировки по убыванию).
+   * @param {BatchImageItem} im
+   */
+  function annotationQualityScore(im) {
+    if (im.status === "failed" || im.status === "skipped") return -1e6;
+    if (im.status === "idle" || im.status === "queued" || im.status === "processing")
+      return -5e5;
+    const d = im.detections || [];
+    if (!d.length) return im.status === "empty" ? -1e3 : -200;
+    const avg = meanDetectionConfidence(im);
+    const minC = minDetectionConfidence(im);
+    let score = avg * 200 + minC * 90;
+    score -= tinyBoxFraction(im) * 160;
+    if (im.reviewed) score += 130;
+    return score;
+  }
+
+  /** @param {BatchImageItem} a @param {BatchImageItem} b */
+  function compareDisplayName(a, b) {
+    return a.displayName.localeCompare(b.displayName, "ru", { sensitivity: "base" });
+  }
+
+  /** @param {BatchImageItem} im */
+  function bboxCountForSort(im) {
+    return Array.isArray(im.detections) ? im.detections.length : 0;
+  }
+
+  /**
+   * @param {"quality-desc"|"quality-asc"|"bbox-count-desc"|"bbox-count-asc"} mode
+   */
+  function applyBatchImageSort(mode) {
+    const images = batchState.images;
+    if (!images.length) return;
+    const curId = images[batchState.currentIndex]?.id ?? null;
+
+    /** @type {BatchImageItem[]} */
+    const next = [...images];
+    next.sort((a, b) => {
+      let c = 0;
+      if (mode === "quality-desc" || mode === "quality-asc") {
+        const sa = annotationQualityScore(a);
+        const sb = annotationQualityScore(b);
+        c = mode === "quality-desc" ? sb - sa : sa - sb;
+      } else {
+        const na = bboxCountForSort(a);
+        const nb = bboxCountForSort(b);
+        c = mode === "bbox-count-desc" ? nb - na : na - nb;
+      }
+      if (c !== 0) return c;
+      return compareDisplayName(a, b);
+    });
+
+    batchState.images = next;
+    if (curId) {
+      const ni = batchState.images.findIndex((x) => x.id === curId);
+      if (ni >= 0) batchState.currentIndex = ni;
+    }
+    touchBatch();
+    scheduleWorkspaceAutosave(0);
+    updateBatchNavUi();
+    closeBatchSortMenu();
+  }
+
   /** @param {BatchImageItem} im */
   function batchItemStatusIcon(im) {
     if (im.reviewed) return "✅";
@@ -2200,6 +2470,9 @@
     }
     pointerInteraction = null;
     clearAddBoxCrosshairOverlayPx();
+    imageUndoStack.length = 0;
+    imageRedoStack.length = 0;
+    hotkeyPreferredNewBboxClassName = null;
     batchState.currentIndex = index;
     touchBatch();
     scheduleWorkspaceAutosave(0);
@@ -2366,6 +2639,9 @@
     revokeBatchObjectUrls();
     pointerInteraction = null;
     clearAddBoxCrosshairOverlayPx();
+    imageUndoStack.length = 0;
+    imageRedoStack.length = 0;
+    hotkeyPreferredNewBboxClassName = null;
     batchState = createEmptyBatchState();
 
     fileInput.value = "";
@@ -2373,7 +2649,6 @@
     previewImage.style.display = "none";
     placeholderText.style.display = "block";
     groupsRoot.innerHTML = "";
-    totalObjectsEl.textContent = "0";
     batchState.settings.confidenceThreshold = 0;
     updateConfidenceFilterDom();
     syncBatchListFilterUiFromState();
@@ -2453,7 +2728,6 @@
       previewImage.style.display = "none";
       placeholderText.style.display = "block";
       groupsRoot.innerHTML = "";
-      totalObjectsEl.textContent = "0";
       clearCanvas();
       updateBatchNavUi();
     }
@@ -2796,7 +3070,6 @@
       previewImage.style.display = "none";
       placeholderText.style.display = "block";
       groupsRoot.innerHTML = "";
-      totalObjectsEl.textContent = "0";
       clearCanvas();
       updateBatchNavUi();
       fileInput.value = "";
@@ -2875,7 +3148,6 @@
     }
 
     groupsRoot.innerHTML = "";
-    totalObjectsEl.textContent = "0";
     pointerInteraction = null;
     updateBatchNavUi();
     showCurrentPreview();
@@ -2984,7 +3256,6 @@
     syncBatchListFilterUiFromState();
     updateBatchNavUi();
     groupsRoot.innerHTML = "";
-    totalObjectsEl.textContent = "0";
     setStatus("Запустить распознавание");
     showCurrentPreview();
     fileInput.value = "";
@@ -3062,7 +3333,10 @@
   async function ingestZipFile(zipFile) {
     const JSZipCtor = globalThis.JSZip;
     if (!JSZipCtor) {
-      alert("JSZip не загружен. Проверьте подключение к интернету и перезагрузите страницу.");
+      showToast(
+        "JSZip не загружен. Проверьте подключение к интернету и перезагрузите страницу.",
+        { type: "error", durationMs: 6500 }
+      );
       fileInput.value = "";
       return;
     }
@@ -3550,6 +3824,10 @@
    * @param {BatchImageItem} im
    */
   function getTrainClassForNewBbox(im) {
+    if (hotkeyPreferredNewBboxClassName) {
+      const hit = TRAIN_CLASSES.find((t) => t.name === hotkeyPreferredNewBboxClassName);
+      if (hit) return hit;
+    }
     const sid = im.panel.selectedDetectionId;
     if (sid != null) {
       const d = im.detections.find((x) => x.id === sid);
@@ -3569,6 +3847,9 @@
     if (!im) return false;
     const sid = im.panel.selectedDetectionId;
     if (sid == null) return false;
+    const det = im.detections.find((d) => d.id === sid);
+    if (!det) return false;
+    pushUndoCheckpoint();
     const before = im.detections.length;
     im.detections = im.detections.filter((d) => d.id !== sid);
     if (im.detections.length === before) return false;
@@ -3610,6 +3891,8 @@
     const bw = box[2] - box[0];
     const bh = box[3] - box[1];
     if (bw < MIN_BOX_SIDE || bh < MIN_BOX_SIDE) return;
+
+    pushUndoCheckpoint();
 
     const tc = getTrainClassForNewBbox(im);
     const newDet = {
@@ -3875,6 +4158,8 @@
       ctx.strokeRect(x, y, Math.max(w, 1), Math.max(h, 1));
       ctx.setLineDash([]);
     }
+
+    updateAddBoxInspectorZoom();
   }
 
   function onOverlayPointerDown(e) {
@@ -3937,6 +4222,7 @@
             selDet.box[3],
           ]),
         };
+        pushUndoCheckpoint();
         e.preventDefault();
         return;
       }
@@ -3954,6 +4240,7 @@
             selDet.box[3],
           ]),
         };
+        pushUndoCheckpoint();
         e.preventDefault();
         return;
       }
@@ -4046,16 +4333,23 @@
     const originalSize = effectiveOriginalSize();
     const imCur = currentImageItem();
     if (!originalSize || !previewImage.src) {
-      alert("Нет изображения или размеров для сохранения.");
+      showToast("Нет изображения или размеров для сохранения.", {
+        type: "warning",
+        durationMs: 4200,
+      });
       return;
     }
     if (imCur?.status === "skipped") {
-      alert("Пропущенные изображения не экспортируются.");
+      showToast("Пропущенные изображения не экспортируются.", {
+        type: "warning",
+        durationMs: 4200,
+      });
       return;
     }
     if (!imCur?.detections?.length) {
-      alert(
-        "На этом кадре нет bbox. Пустое изображение без разметки не экспортируется."
+      showToast(
+        "На этом кадре нет bbox. Пустое изображение без разметки не экспортируется.",
+        { type: "warning", durationMs: 4500 }
       );
       return;
     }
@@ -4133,16 +4427,23 @@
     const originalSize = effectiveOriginalSize();
     const imCur = currentImageItem();
     if (!originalSize) {
-      alert("Нет размеров изображения для экспорта.");
+      showToast("Нет размеров изображения для экспорта.", {
+        type: "warning",
+        durationMs: 4200,
+      });
       return;
     }
     if (imCur?.status === "skipped") {
-      alert("Пропущенные изображения не экспортируются.");
+      showToast("Пропущенные изображения не экспортируются.", {
+        type: "warning",
+        durationMs: 4200,
+      });
       return;
     }
     if (!imCur?.detections?.length) {
-      alert(
-        "На этом кадре нет bbox. Пустое изображение без разметки не экспортируется."
+      showToast(
+        "На этом кадре нет bbox. Пустое изображение без разметки не экспортируется.",
+        { type: "warning", durationMs: 4500 }
       );
       return;
     }
@@ -4182,7 +4483,10 @@
     }
 
     if (!lines.length) {
-      alert("Все боксы выключены. Включите нужные объекты перед экспортом.");
+      showToast(
+        "Нет включённых bbox для экспорта. Включите нужные объекты на панели справа.",
+        { type: "warning", durationMs: 5000 }
+      );
       return;
     }
 
@@ -4209,16 +4513,23 @@
     const originalSize = effectiveOriginalSize();
     const imCur = currentImageItem();
     if (!originalSize) {
-      alert("Нет размеров изображения для экспорта.");
+      showToast("Нет размеров изображения для экспорта.", {
+        type: "warning",
+        durationMs: 4200,
+      });
       return;
     }
     if (imCur?.status === "skipped") {
-      alert("Пропущенные изображения не экспортируются.");
+      showToast("Пропущенные изображения не экспортируются.", {
+        type: "warning",
+        durationMs: 4200,
+      });
       return;
     }
     if (!imCur?.detections?.length) {
-      alert(
-        "На этом кадре нет bbox. Пустое изображение без разметки не экспортируется."
+      showToast(
+        "На этом кадре нет bbox. Пустое изображение без разметки не экспортируется.",
+        { type: "warning", durationMs: 4500 }
       );
       return;
     }
@@ -4278,7 +4589,10 @@
     }
 
     if (!finalDetections.length) {
-      alert("Все боксы выключены или ниже порога. Включите нужные объекты перед экспортом.");
+      showToast(
+        "Нет включённых bbox для экспорта (выключены или ниже порога уверенности). Измените фильтр или включите объекты справа.",
+        { type: "warning", durationMs: 5200 }
+      );
       return;
     }
 
@@ -4356,6 +4670,152 @@
     panel.appendChild(row);
   }
 
+  function addBoxZoomImagePoint() {
+    if (!editorModeIsEdit() || batchState.settings.editorTool !== "addBox") {
+      return null;
+    }
+    const geo = getOverlayGeometry();
+    if (!geo) return null;
+
+    if (pointerInteraction?.kind === "addBox") {
+      const ix = pointerInteraction.ix1 ?? pointerInteraction.ix0;
+      const iy = pointerInteraction.iy1 ?? pointerInteraction.iy0;
+      if (typeof ix === "number" && typeof iy === "number") {
+        return {
+          ix: clamp(ix, 0, geo.imgW0),
+          iy: clamp(iy, 0, geo.imgH0),
+          imgW: geo.imgW0,
+          imgH: geo.imgH0,
+        };
+      }
+    }
+
+    if (addBoxCrosshairOverlayPx) {
+      const { ix, iy } = canvasToImageCoords(
+        geo,
+        addBoxCrosshairOverlayPx.ox,
+        addBoxCrosshairOverlayPx.oy
+      );
+      return {
+        ix: clamp(ix, 0, geo.imgW0),
+        iy: clamp(iy, 0, geo.imgH0),
+        imgW: geo.imgW0,
+        imgH: geo.imgH0,
+      };
+    }
+
+    return null;
+  }
+
+  function updateAddBoxInspectorZoom() {
+    const canvas = inspectorRoot.querySelector(".inspector-addbox-zoom-canvas");
+    const hint = inspectorRoot.querySelector(".inspector-addbox-zoom-hint");
+    if (!(canvas instanceof HTMLCanvasElement)) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const point = addBoxZoomImagePoint();
+    const ready =
+      point &&
+      previewImage.complete &&
+      previewImage.naturalWidth > 0 &&
+      previewImage.naturalHeight > 0;
+
+    canvas.width = 260;
+    canvas.height = 170;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (!ready) {
+      ctx.fillStyle = "#0f1116";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      if (hint) hint.textContent = "Наведите курсор на изображение.";
+      return;
+    }
+
+    const cropH = Math.max(32, Math.min(point.imgH, point.imgH * 0.22));
+    const cropW = Math.max(32, Math.min(point.imgW, cropH * (canvas.width / canvas.height)));
+    const sx0 = clamp(point.ix - cropW / 2, 0, Math.max(0, point.imgW - cropW));
+    const sy0 = clamp(point.iy - cropH / 2, 0, Math.max(0, point.imgH - cropH));
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.fillStyle = "#0f1116";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Рисуем только исходное фото: overlay с bbox/крестом не участвует.
+    ctx.drawImage(
+      previewImage,
+      sx0,
+      sy0,
+      cropW,
+      cropH,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
+
+    const cursorX = ((point.ix - sx0) / cropW) * canvas.width;
+    const cursorY = ((point.iy - sy0) / cropH) * canvas.height;
+
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.beginPath();
+    ctx.moveTo(0, cursorY);
+    ctx.lineTo(canvas.width, cursorY);
+    ctx.moveTo(cursorX, 0);
+    ctx.lineTo(cursorX, canvas.height);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(63, 130, 247, 0.85)";
+    ctx.lineDashOffset = 5;
+    ctx.beginPath();
+    ctx.moveTo(0, cursorY);
+    ctx.lineTo(canvas.width, cursorY);
+    ctx.moveTo(cursorX, 0);
+    ctx.lineTo(cursorX, canvas.height);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
+    ctx.restore();
+
+    if (hint) {
+      hint.textContent = `${Math.round(point.ix)}, ${Math.round(point.iy)} px`;
+    }
+  }
+
+  function appendAddBoxZoomInspector(panel) {
+    if (
+      !editorModeIsEdit() ||
+      batchState.settings.editorTool !== "addBox" ||
+      previewImage.style.display === "none" ||
+      !effectiveOriginalSize()
+    ) {
+      return;
+    }
+
+    const wrap = document.createElement("div");
+    wrap.className = "inspector-addbox-zoom";
+
+    const title = document.createElement("div");
+    title.className = "inspector-addbox-zoom-title";
+    title.textContent = "Приближение";
+
+    const canvas = document.createElement("canvas");
+    canvas.className = "inspector-addbox-zoom-canvas";
+    canvas.setAttribute("aria-label", "Приближенный фрагмент изображения без разметки");
+
+    const hint = document.createElement("div");
+    hint.className = "inspector-addbox-zoom-hint";
+    hint.textContent = "Наведите курсор на изображение.";
+
+    wrap.appendChild(title);
+    wrap.appendChild(canvas);
+    wrap.appendChild(hint);
+    panel.appendChild(wrap);
+    updateAddBoxInspectorZoom();
+  }
+
   function buildInspector() {
     inspectorRoot.innerHTML = "";
     const panel = document.createElement("div");
@@ -4363,7 +4823,7 @@
 
     const h = document.createElement("h4");
     h.className = "inspector-heading";
-    h.textContent = "Inspector";
+    h.textContent = "Инспектор";
     panel.appendChild(h);
 
     const im = currentImageItem();
@@ -4376,19 +4836,21 @@
       return;
     }
 
+    appendAddBoxZoomInspector(panel);
+
     const sid = im.panel.selectedDetectionId;
     const det =
       sid != null ? (im.detections.find((d) => d.id === sid) ?? null) : null;
 
     if (!det) {
       inspectorAppendRow(panel, "Изображение", im.displayName || "—");
-      inspectorAppendRow(panel, "Статус", im.status);
-      inspectorAppendRow(panel, "Reviewed", im.reviewed ? "да" : "нет");
-      inspectorAppendRow(panel, "Edited", im.edited ? "да" : "нет");
+      inspectorAppendRow(panel, "Статус", formatImageStatusForUi(im.status));
+      inspectorAppendRow(panel, "Проверено", im.reviewed ? "да" : "нет");
+      inspectorAppendRow(panel, "Изменено", im.edited ? "да" : "нет");
       const wh =
         im.width > 0 && im.height > 0 ? `${im.width} × ${im.height}` : "—";
       inspectorAppendRow(panel, "Размер", wh);
-      inspectorAppendRow(panel, "Bbox", String(im.detections?.length ?? 0));
+      inspectorAppendRow(panel, "Кол-во bbox", String(im.detections?.length ?? 0));
       if (im.status === "failed" && im.error) {
         const err = document.createElement("div");
         err.className = "inspector-error";
@@ -4397,9 +4859,9 @@
       }
     } else {
       inspectorAppendRow(panel, "Класс", det.cls_name);
-      inspectorAppendRow(panel, "Confidence", fmtConf(det.conf));
-      inspectorAppendRow(panel, "Source", detectionSourceLabel(det));
-      inspectorAppendRow(panel, "Box", fmtBoxCoords(det.box));
+      inspectorAppendRow(panel, "Уверенность", fmtConf(det.conf));
+      inspectorAppendRow(panel, "Источник", detectionSourceLabel(det));
+      inspectorAppendRow(panel, "bbox", fmtBoxCoords(det.box));
 
       const actions = document.createElement("div");
       actions.className = "inspector-actions";
@@ -4453,10 +4915,35 @@
     const detEnabled = im?.panel.detEnabled ?? new Map();
 
     const filtered = detections.filter((d) => d.conf >= confThreshold());
-    totalObjectsEl.textContent = String(filtered.length);
 
     const grouped = groupByCategory(filtered);
     const cats = Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b));
+
+    const renderGroupsEmpty = (message) => {
+      const empty = document.createElement("div");
+      empty.className = "groups-empty";
+      empty.textContent = message;
+      groupsRoot.appendChild(empty);
+    };
+
+    const visibleCats = cats.filter((c) => !classHidden(c));
+    if (!visibleCats.length) {
+      if (!im) {
+        renderGroupsEmpty("Выберите кадр в списке слева.");
+      } else if (filtered.length === 0 && detections.length > 0) {
+        renderGroupsEmpty(
+          "Нет объектов выше текущего порога уверенности — ослабьте фильтр выше."
+        );
+      } else if (filtered.length === 0) {
+        renderGroupsEmpty(
+          "На этом кадре пока нет объектов. Запустите распознавание или добавьте bbox в режиме редактирования."
+        );
+      } else {
+        renderGroupsEmpty(
+          "Все классы скрыты — включите их на полоске классов над изображением."
+        );
+      }
+    }
 
     for (const cat of cats) {
       if (classHidden(cat)) continue;
@@ -4482,7 +4969,10 @@
 
       const catCheckbox = document.createElement("input");
       catCheckbox.type = "checkbox";
+      catCheckbox.className = "group-cat-toggle";
       catCheckbox.checked = st.enabled;
+      catCheckbox.title = "Показывать класс на кадре и в экспорте";
+      catCheckbox.addEventListener("click", (ev) => ev.stopPropagation());
       catCheckbox.addEventListener("change", () => {
         const s = categoryState.get(cat);
         if (s) s.enabled = catCheckbox.checked;
@@ -4499,10 +4989,19 @@
       count.className = "group-count";
       count.textContent = String(grouped.get(cat).length);
 
+      const chevron = document.createElement("span");
+      chevron.className = "group-chevron";
+      chevron.setAttribute("aria-hidden", "true");
+
+      const meta = document.createElement("div");
+      meta.className = "group-summary-meta";
+      meta.appendChild(count);
+      meta.appendChild(chevron);
+
       left.appendChild(catCheckbox);
       left.appendChild(title);
       summary.appendChild(left);
-      summary.appendChild(count);
+      summary.appendChild(meta);
 
       const items = document.createElement("div");
       items.className = "group-items";
@@ -4516,6 +5015,8 @@
 
         const cb = document.createElement("input");
         cb.type = "checkbox";
+        cb.className = "det-row-toggle";
+        cb.title = "Учитывать объект при отрисовке и экспорте";
         cb.checked = detEnabled.get(d.id) !== false;
         cb.addEventListener("click", (ev) => ev.stopPropagation());
         cb.addEventListener("change", () => {
@@ -4620,7 +5121,7 @@
   viewerPrev.addEventListener("click", () => navigateBatch(-1));
   viewerNext.addEventListener("click", () => navigateBatch(1));
 
-  markReviewedBtn.addEventListener("click", () => {
+  function applyMarkReviewedFromToolbar() {
     const im = currentImageItem();
     if (!im || im.reviewed) return;
     const idx = batchState.currentIndex;
@@ -4630,6 +5131,10 @@
     updateBatchNavUi();
     const next = findNextUnreviewedNonSkippedIndex(idx);
     if (next !== null) selectBatchIndex(next);
+  }
+
+  markReviewedBtn.addEventListener("click", () => {
+    applyMarkReviewedFromToolbar();
   });
 
   skipImageBtn.addEventListener("click", () => {
@@ -4638,21 +5143,122 @@
 
   document.addEventListener("keydown", (e) => {
     if (e.defaultPrevented) return;
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (isTypingInteractionTarget(e.target)) return;
 
-    if (e.key === "Delete") {
-      if (editorModeIsEdit() && tryDeleteSelectedDetection()) {
+    if (e.code === "Escape" && !hotkeysHelpOverlay.hidden) {
+      closeHotkeysHelp();
+      e.preventDefault();
+      return;
+    }
+
+    const typing = isTypingInteractionTarget(e.target);
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && e.code === "KeyZ" && !e.shiftKey) {
+      if (!typing && undoImageWorkspace()) e.preventDefault();
+      return;
+    }
+    if (mod && (e.code === "KeyY" || (e.code === "KeyZ" && e.shiftKey))) {
+      if (!typing && redoImageWorkspace()) e.preventDefault();
+      return;
+    }
+
+    if (mod || e.altKey) return;
+    if (!importSummaryOverlay.hidden || !exportSummaryOverlay.hidden) return;
+    if (!hotkeysHelpOverlay.hidden) return;
+    if (typing) return;
+
+    const code = e.code;
+
+    if (code === "Escape") {
+      cancelActiveEditorTool();
+      e.preventDefault();
+      return;
+    }
+
+    if (code === "ArrowLeft") {
+      if (!batchState.images.length) return;
+      e.preventDefault();
+      navigateBatch(-1);
+      return;
+    }
+    if (code === "ArrowRight") {
+      if (!batchState.images.length) return;
+      e.preventDefault();
+      navigateBatch(1);
+      return;
+    }
+
+    if (code === "KeyR") {
+      applyMarkReviewedFromToolbar();
+      e.preventDefault();
+      return;
+    }
+    if (code === "KeyS") {
+      skipCurrentImage();
+      e.preventDefault();
+      return;
+    }
+    if (code === "KeyE") {
+      batchState.settings.editorMode = editorModeIsEdit() ? "review" : "edit";
+      pointerInteraction = null;
+      touchBatch();
+      syncEditorChrome();
+      buildInspector();
+      buildRightPanel();
+      draw();
+      e.preventDefault();
+      return;
+    }
+    if (code === "KeyA") {
+      batchState.settings.editorMode = "edit";
+      batchState.settings.editorTool = "addBox";
+      pointerInteraction = null;
+      touchBatch();
+      syncEditorChrome();
+      buildInspector();
+      buildRightPanel();
+      draw();
+      e.preventDefault();
+      return;
+    }
+
+    if (code === "Digit1" || code === "Numpad1") {
+      if (editorModeIsEdit() && batchState.settings.editorTool === "addBox") {
+        const tc = TRAIN_CLASSES[0];
+        if (tc) hotkeyPreferredNewBboxClassName = tc.name;
+        e.preventDefault();
+      }
+      return;
+    }
+    if (code === "Digit2" || code === "Numpad2") {
+      if (editorModeIsEdit() && batchState.settings.editorTool === "addBox") {
+        const tc = TRAIN_CLASSES[1];
+        if (tc) hotkeyPreferredNewBboxClassName = tc.name;
+        e.preventDefault();
+      }
+      return;
+    }
+    if (code === "Digit3" || code === "Numpad3") {
+      if (editorModeIsEdit() && batchState.settings.editorTool === "addBox") {
+        const tc = TRAIN_CLASSES[2];
+        if (tc) hotkeyPreferredNewBboxClassName = tc.name;
+        e.preventDefault();
+      }
+      return;
+    }
+    if (code === "Digit4" || code === "Numpad4") {
+      if (editorModeIsEdit() && batchState.settings.editorTool === "addBox") {
+        const tc = TRAIN_CLASSES[3];
+        if (tc) hotkeyPreferredNewBboxClassName = tc.name;
         e.preventDefault();
       }
       return;
     }
 
-    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-    if (!batchState.images.length) return;
-    e.preventDefault();
-    if (e.key === "ArrowLeft") navigateBatch(-1);
-    else navigateBatch(1);
+    if (code === "Backspace" || code === "Delete") {
+      if (editorModeIsEdit() && tryDeleteSelectedDetection()) {
+        e.preventDefault();
+      }
+    }
   });
 
   overlay.addEventListener("mousedown", onOverlayPointerDown);
@@ -4678,6 +5284,7 @@
     pointerInteraction = null;
     touchBatch();
     syncEditorChrome();
+    buildInspector();
     buildRightPanel();
     draw();
   });
@@ -4687,6 +5294,7 @@
     pointerInteraction = null;
     touchBatch();
     syncEditorChrome();
+    buildInspector();
     buildRightPanel();
     draw();
   });
@@ -4696,6 +5304,7 @@
     pointerInteraction = null;
     touchBatch();
     syncEditorChrome();
+    buildInspector();
     draw();
   });
 
@@ -4704,6 +5313,7 @@
     pointerInteraction = null;
     touchBatch();
     syncEditorChrome();
+    buildInspector();
     draw();
   });
 
@@ -4729,10 +5339,52 @@
     onBatchListFiltersChanged();
   });
 
+  batchSortToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!batchState.images.length) return;
+    closeExportMenu();
+    closeHotkeysHelp();
+    const willOpen = batchSortMenu.hidden;
+    batchSortMenu.hidden = !willOpen;
+    batchSortToggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+  });
+
+  batchSortMenu.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const btn = e.target.closest("[data-batch-sort]");
+    if (!(btn instanceof HTMLButtonElement)) return;
+    const mode = btn.getAttribute("data-batch-sort");
+    if (
+      mode === "quality-desc" ||
+      mode === "quality-asc" ||
+      mode === "bbox-count-desc" ||
+      mode === "bbox-count-asc"
+    ) {
+      applyBatchImageSort(
+        /** @type {"quality-desc"|"quality-asc"|"bbox-count-desc"|"bbox-count-asc"} */ (mode)
+      );
+    }
+  });
+
+  hotkeysHelpBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openHotkeysHelp();
+  });
+  hotkeysHelpClose.addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeHotkeysHelp();
+  });
+  hotkeysHelpOverlay.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (e.target === hotkeysHelpOverlay) closeHotkeysHelp();
+  });
+
   clearBtn.addEventListener("click", () => clearAll(true));
 
   exportMenuToggle.addEventListener("click", (e) => {
     e.stopPropagation();
+    closeBatchSortMenu();
+    closeHotkeysHelp();
     const willOpen = exportMenuPanel.hidden;
     exportMenuPanel.hidden = !willOpen;
     exportMenuToggle.setAttribute(
@@ -4743,7 +5395,19 @@
 
   document.addEventListener("click", () => {
     closeExportMenu();
+    closeBatchSortMenu();
   });
+
+  document.addEventListener(
+    "click",
+    (e) => {
+      if (hotkeysHelpOverlay.hidden) return;
+      const t = /** @type {Node} */ (e.target);
+      if (hotkeysHelpOverlay.contains(t)) return;
+      closeHotkeysHelp();
+    },
+    true
+  );
 
   exportMenuPanel.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -4806,7 +5470,7 @@
 
     if (!indices.length) {
       showToast(
-        "Нет изображений для очереди (idle, ошибка, пусто или повтор распознанных; пропускаются skipped и уже queued/processing).",
+        "Нет изображений для очереди (не обработано, ошибка, пусто или повтор распознанных; пропускаются «пропущено» и уже в очереди / выполняется распознавание).",
         { type: "info", durationMs: 4500 }
       );
       return;

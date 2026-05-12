@@ -38,7 +38,8 @@
  *   viewerFilename: HTMLElement,
  *   batchImageListRoot: HTMLElement,
  *   batchStatusFilter: HTMLSelectElement,
- *   totalObjectsEl: HTMLElement,
+ *   batchSortToggle: HTMLButtonElement,
+ *   batchSortMenu: HTMLElement,
  *   groupsRoot: HTMLElement,
  *   inspectorRoot: HTMLElement,
  *   confFilterRange: HTMLInputElement,
@@ -48,6 +49,9 @@
  *   editorToolsBar: HTMLElement,
  *   editorToolSelectBtn: HTMLButtonElement,
  *   editorToolAddBtn: HTMLButtonElement,
+ *   hotkeysHelpBtn: HTMLButtonElement,
+ *   hotkeysHelpOverlay: HTMLElement,
+ *   hotkeysHelpClose: HTMLButtonElement,
  *   classChipsRoot: HTMLElement,
  * }} AppDomRefs
  */
@@ -91,7 +95,8 @@ export function collectDomRefs() {
   const viewerFilename = document.getElementById("viewer-filename");
   const batchImageListRoot = document.getElementById("batch-image-list-root");
   const batchStatusFilter = document.getElementById("batch-status-filter");
-  const totalObjectsEl = document.getElementById("total-objects");
+  const batchSortToggle = document.getElementById("batch-sort-toggle");
+  const batchSortMenu = document.getElementById("batch-sort-menu");
   const groupsRoot = document.getElementById("groups-root");
   const inspectorRoot = document.getElementById("inspector-root");
   const confFilterRange = document.getElementById("confidence-filter-range");
@@ -101,6 +106,9 @@ export function collectDomRefs() {
   const editorToolsBar = document.getElementById("editor-tools-bar");
   const editorToolSelectBtn = document.getElementById("editor-tool-select");
   const editorToolAddBtn = document.getElementById("editor-tool-add");
+  const hotkeysHelpBtn = document.getElementById("hotkeys-help-btn");
+  const hotkeysHelpOverlay = document.getElementById("hotkeys-help-overlay");
+  const hotkeysHelpClose = document.getElementById("hotkeys-help-close");
   const classChipsRoot = document.getElementById("class-chips-root");
 
   if (
@@ -125,7 +133,6 @@ export function collectDomRefs() {
     !headerProgressFill ||
     !headerFailedRow ||
     !headerFailedCount ||
-    !totalObjectsEl ||
     !groupsRoot ||
     !inspectorRoot ||
     !confFilterRange ||
@@ -146,11 +153,16 @@ export function collectDomRefs() {
     !viewerFilename ||
     !batchImageListRoot ||
     !batchStatusFilter ||
+    !batchSortToggle ||
+    !batchSortMenu ||
     !editorModeReviewBtn ||
     !editorModeEditBtn ||
     !editorToolsBar ||
     !editorToolSelectBtn ||
     !editorToolAddBtn ||
+    !hotkeysHelpBtn ||
+    !hotkeysHelpOverlay ||
+    !hotkeysHelpClose ||
     !classChipsRoot
   ) {
     return null;
@@ -194,7 +206,8 @@ export function collectDomRefs() {
     viewerFilename,
     batchImageListRoot,
     batchStatusFilter,
-    totalObjectsEl,
+    batchSortToggle,
+    batchSortMenu,
     groupsRoot,
     inspectorRoot,
     confFilterRange,
@@ -204,6 +217,9 @@ export function collectDomRefs() {
     editorToolsBar,
     editorToolSelectBtn,
     editorToolAddBtn,
+    hotkeysHelpBtn,
+    hotkeysHelpOverlay,
+    hotkeysHelpClose,
     classChipsRoot,
   };
 }

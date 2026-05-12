@@ -5,5 +5,5 @@ export const EXPORT_ACTION_LABELS = {
   "batch-png-clean": "Весь батч: PNG ZIP без разметки",
   "batch-png-marked": "Весь батч: PNG ZIP с разметкой",
   "batch-yolo-zip": "Весь батч: YOLO TXT (ZIP)",
-  "batch-project-zip": "Весь батч: Full Project ZIP",
+  "batch-project-zip": "Весь батч: ZIP полного проекта",
 };

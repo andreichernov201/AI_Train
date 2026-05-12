@@ -48,21 +48,52 @@
       <button id="clear-btn">Очистить</button>
       <button class="primary" id="run-btn">Запустить распознавание</button>
 
-      <section class="batch-images-panel" aria-label="Изображения в batch">
+      <section class="batch-images-panel" aria-label="Изображения в батче">
         <div class="batch-images-panel-head">
           <h3 class="batch-images-heading">Изображения</h3>
         </div>
         <div class="batch-list-filters">
-          <label class="batch-filter-label" for="batch-status-filter">Статус</label>
-          <select id="batch-status-filter" class="batch-status-select">
-            <option value="all">Все</option>
-            <option value="idle">Не обработано</option>
-            <option value="needs_review">Нужно проверить</option>
-            <option value="reviewed">Проверено</option>
-            <option value="empty">Пустые</option>
-            <option value="failed">Ошибки</option>
-            <option value="skipped">Пропущенные</option>
-          </select>
+          <div class="batch-filter-status-row">
+            <div class="batch-filter-status-field">
+              <label class="batch-filter-label" for="batch-status-filter">Статус</label>
+              <select id="batch-status-filter" class="batch-status-select">
+                <option value="all">Все</option>
+                <option value="idle">Не обработано</option>
+                <option value="needs_review">Нужно проверить</option>
+                <option value="reviewed">Проверено</option>
+                <option value="empty">Пустые</option>
+                <option value="failed">Ошибки</option>
+                <option value="skipped">Пропущенные</option>
+              </select>
+            </div>
+            <div class="batch-sort-dropdown" id="batch-sort-dropdown">
+              <button
+                type="button"
+                id="batch-sort-toggle"
+                class="batch-sort-toggle"
+                aria-expanded="false"
+                aria-haspopup="menu"
+                aria-controls="batch-sort-menu"
+                title="Упорядочить список изображений"
+              >
+                ↕
+              </button>
+              <div id="batch-sort-menu" class="batch-sort-menu" hidden role="menu" aria-label="Порядок списка">
+                <button type="button" role="menuitem" class="batch-sort-item" data-batch-sort="quality-desc">
+                  Сначала лучшие
+                </button>
+                <button type="button" role="menuitem" class="batch-sort-item" data-batch-sort="quality-asc">
+                  Сначала худшие
+                </button>
+                <button type="button" role="menuitem" class="batch-sort-item" data-batch-sort="bbox-count-desc">
+                  Сначала больше bbox
+                </button>
+                <button type="button" role="menuitem" class="batch-sort-item" data-batch-sort="bbox-count-asc">
+                  Сначала меньше bbox
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
         <div id="batch-image-list-root" class="batch-image-list"></div>
       </section>
@@ -102,7 +133,7 @@
               YOLO TXT (ZIP)
             </button>
             <button type="button" role="menuitem" class="export-menu-item" data-export="batch-project-zip">
-              Full Project ZIP
+              ZIP полного проекта
             </button>
           </div>
         </div>
@@ -131,7 +162,7 @@
                   aria-checked="true"
                 >
                   <span class="editor-mode-icon" aria-hidden="true">🔒</span>
-                  <span class="editor-mode-text">Review mode</span>
+                  <span class="editor-mode-text">Режим просмотра</span>
                 </button>
                 <button
                   type="button"
@@ -141,7 +172,7 @@
                   aria-checked="false"
                 >
                   <span class="editor-mode-icon" aria-hidden="true">🔓</span>
-                  <span class="editor-mode-text">Edit mode</span>
+                  <span class="editor-mode-text">Редактирование</span>
                 </button>
               </div>
             </div>
@@ -156,17 +187,17 @@
             </div>
             <div class="canvas-area-bar-tools">
               <div id="editor-tools-bar" class="editor-tools-bar" hidden>
-                <span class="editor-tools-heading">TOOLS</span>
+                <span class="editor-tools-heading">Инструменты</span>
                 <div class="editor-tools-toggle" role="group" aria-label="Инструмент">
                   <button
                     type="button"
                     id="editor-tool-select"
                     class="editor-tool-chip is-active"
                   >
-                    Select
+                    Выделение
                   </button>
                   <button type="button" id="editor-tool-add" class="editor-tool-chip">
-                    Add box
+                    Добавить bbox
                   </button>
                 </div>
               </div>
@@ -237,7 +268,6 @@
     <!-- Правая панель -->
     <div class="sidebar right">
       <h3>Найденные узлы локомотива</h3>
-      <p>Всего объектов: <span id="total-objects">0</span></p>
       <div class="confidence-filter" aria-label="Порог уверенности модели">
         <div class="confidence-filter-head">
           <label class="confidence-filter-title" for="confidence-filter-range">
@@ -249,9 +279,6 @@
             for="confidence-filter-range"
             >0.00</output>
         </div>
-        <p class="confidence-filter-hint">
-          Показывать детекции с <span class="confidence-filter-hint-math">conf ≥</span> порога
-        </p>
         <div class="confidence-filter-track">
           <input
             type="range"
@@ -281,7 +308,23 @@
         <div id="inspector-root"></div>
       </section>
 
-      <div id="groups-root"></div>
+      <section class="groups-root-wrap" aria-label="Объекты по классам">
+        <h4 class="groups-panel-heading">По классам</h4>
+        <div id="groups-root" class="groups-root-stack"></div>
+        <div class="groups-root-footer">
+          <button
+            type="button"
+            id="hotkeys-help-btn"
+            class="hotkeys-help-btn"
+            title="Горячие клавиши"
+            aria-label="Горячие клавиши"
+            aria-haspopup="dialog"
+            aria-controls="hotkeys-help-overlay"
+          >
+            ⌨
+          </button>
+        </div>
+      </section>
     </div>
 
     </div>
@@ -330,6 +373,40 @@
     <div id="import-summary-body" class="import-summary-body"></div>
     <div class="import-summary-actions">
       <button type="button" class="primary" id="import-summary-close">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<div
+  id="hotkeys-help-overlay"
+  class="hotkeys-help-overlay"
+  hidden
+  role="presentation"
+>
+  <div
+    class="hotkeys-help-dialog"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="hotkeys-help-title"
+    tabindex="-1"
+  >
+    <h3 id="hotkeys-help-title" class="hotkeys-help-title">Горячие кнопки</h3>
+    <dl class="hotkeys-help-list">
+      <div><dt>← / →</dt><dd>предыдущий / следующий кадр</dd></div>
+      <div><dt>R</dt><dd>отметить кадр проверенным</dd></div>
+      <div><dt>S</dt><dd>пропустить кадр</dd></div>
+      <div><dt>E</dt><dd>переключить режим просмотра / редактирования</dd></div>
+      <div><dt>A</dt><dd>добавить bbox</dd></div>
+      <div><dt>Backspace</dt><dd>удалить выбранный bbox</dd></div>
+      <div><dt>1</dt><dd>класс body</dd></div>
+      <div><dt>2</dt><dd>класс autocoupler</dd></div>
+      <div><dt>3</dt><dd>класс axlebox</dd></div>
+      <div><dt>4</dt><dd>класс bogie</dd></div>
+      <div><dt>Esc</dt><dd>отменить текущий инструмент</dd></div>
+      <div><dt>Ctrl+Z / Ctrl+Y</dt><dd>отменить / повторить действие</dd></div>
+    </dl>
+    <div class="hotkeys-help-actions">
+      <button type="button" class="primary" id="hotkeys-help-close">Закрыть</button>
     </div>
   </div>
 </div>
