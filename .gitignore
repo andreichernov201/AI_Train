@@ -36,12 +36,14 @@ Desktop.ini
 # Logs
 *.log
 
-# Model / training artifacts (обычно большие и воспроизводимые)
-runs/
-
 # Frontend deps (если появятся)
 node_modules/
 
-# IMPORTANT:
-# - Картинки (.jpg/.png/...) и разметка/аннотации (.txt/.json/.xml/.html/.md) НЕ игнорируются.
-
+# Локальный набор данных (не коммитить и не пушить на GitHub)
+dataset/
+runs/
+railgallery_photos/
+yolo-seg/
+*.pt
+*.zip
+*.rar

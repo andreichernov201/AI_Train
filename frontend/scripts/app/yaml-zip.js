@@ -69,3 +69,25 @@ export function findProjectJsonEntry(zip) {
   }
   return null;
 }
+
+/**
+ * Ищет файл по окончанию пути (case-insensitive), например `001.png` или `cat/001.png`.
+ * Возвращает первый лексикографически отсортированный матч для стабильности.
+ * @param {any} zip
+ * @param {string} pathSuffix
+ */
+export function findZipEntryBySuffixCaseInsensitive(zip, pathSuffix) {
+  const suffix = normalizeZipPath(pathSuffix).toLowerCase();
+  if (!suffix) return null;
+  const hits = [];
+  for (const e of Object.values(zip.files)) {
+    if (e.dir) continue;
+    const p = normalizeZipPath(e.name).toLowerCase();
+    if (p.endsWith(suffix)) hits.push(e);
+  }
+  if (!hits.length) return null;
+  hits.sort((a, b) =>
+    normalizeZipPath(a.name).localeCompare(normalizeZipPath(b.name))
+  );
+  return hits[0];
+}

@@ -1,23 +1,65 @@
-/** Фиксированные классы сайта: редактор не становится универсальным редактором любых классов. */
-export const TRAIN_PART_CLASS_NAMES = ["body", "autocoupler", "axlebox", "bogie"];
-/** Индексы классов в batch-экспорте YOLO TXT (0–3), фиксированный порядок классов сайта. */
-export const YOLO_TXT_EXPORT_CLASS_ORDER = Object.freeze([...TRAIN_PART_CLASS_NAMES]);
-export const DEFAULT_TRAIN_CLASSES = TRAIN_PART_CLASS_NAMES.map((name, id) => ({
-  name,
-  id,
-}));
+/** Фиксированные классы для каждого режима разметки. */
+export const DETECTION_CLASS_NAMES = Object.freeze(["train", "number"]);
+export const SEGMENTATION_CLASS_NAMES = Object.freeze([
+  "body",
+  "autocoupler",
+  "axlebox",
+  "bogie",
+  "hose",
+]);
 
-/** @type {Array<{ name: string; id: number }>} */
-export let TRAIN_CLASSES = DEFAULT_TRAIN_CLASSES.map((tc) => ({ ...tc }));
+/** @type {string[]} */
+let detectionClassOrder = [...DETECTION_CLASS_NAMES];
+/** @type {string[]} */
+let segmentationClassOrder = [...SEGMENTATION_CLASS_NAMES];
 
-export function resetTrainClassesToDefault() {
-  TRAIN_CLASSES = DEFAULT_TRAIN_CLASSES.map((tc) => ({ ...tc }));
+/** @param {unknown} mode */
+function isSegmentationMode(mode) {
+  return mode === "segmentation" || mode === "segment";
 }
 
-/** @param {string[]} names */
-export function trainClassNamesMatchFixedSet(names) {
+/** @param {unknown} mode */
+function fixedNamesForMode(mode) {
+  return isSegmentationMode(mode)
+    ? SEGMENTATION_CLASS_NAMES
+    : DETECTION_CLASS_NAMES;
+}
+
+/** @param {unknown} mode */
+function classOrderForMode(mode) {
+  return isSegmentationMode(mode)
+    ? segmentationClassOrder
+    : detectionClassOrder;
+}
+
+/** @param {unknown} mode @returns {Array<{ name: string; id: number }>} */
+export function trainClassesForMode(mode = "detection") {
+  return classOrderForMode(mode).map((name, id) => ({ name, id }));
+}
+
+/** @param {"detect"|"segment"|"detection"|"segmentation"} [task] */
+export function yoloClassOrderForTask(task = "detect") {
+  return [...classOrderForMode(task)];
+}
+
+/**
+ * Сброс порядка классов. Без режима сбрасываются оба набора.
+ * @param {unknown} [mode]
+ */
+export function resetTrainClassesToDefault(mode) {
+  if (mode === undefined || !isSegmentationMode(mode)) {
+    detectionClassOrder = [...DETECTION_CLASS_NAMES];
+  }
+  if (mode === undefined || isSegmentationMode(mode)) {
+    segmentationClassOrder = [...SEGMENTATION_CLASS_NAMES];
+  }
+}
+
+/** @param {string[]} names @param {unknown} [mode] */
+export function trainClassNamesMatchFixedSet(names, mode) {
+  if (!Array.isArray(names)) return false;
   const actual = names.map((name) => String(name).trim().toLowerCase()).sort();
-  const expected = [...TRAIN_PART_CLASS_NAMES].sort();
+  const expected = [...fixedNamesForMode(mode)].sort();
   return (
     actual.length === expected.length &&
     actual.every((name, i) => name === expected[i])
@@ -25,17 +67,31 @@ export function trainClassNamesMatchFixedSet(names) {
 }
 
 /**
- * Если переданный набор имён совпадает с фиксированными классами сайта — порядок берётся из источника, иначе классы сбрасываются по умолчанию.
+ * Применяет порядок из импортированного YAML/проекта, если набор классов
+ * совпадает с одним из двух фиксированных наборов сайта.
  * @param {string[]} names
+ * @param {unknown} [mode]
  */
-export function applyTrainClassOrderFromNames(names) {
-  if (!trainClassNamesMatchFixedSet(names)) {
-    resetTrainClassesToDefault();
+export function applyTrainClassOrderFromNames(names, mode) {
+  const normalized = Array.isArray(names)
+    ? names.map((name) => String(name).trim().toLowerCase())
+    : [];
+  const resolvedMode =
+    mode === undefined
+      ? trainClassNamesMatchFixedSet(normalized, "segmentation")
+        ? "segmentation"
+        : "detection"
+      : mode;
+
+  if (!trainClassNamesMatchFixedSet(normalized, resolvedMode)) {
+    resetTrainClassesToDefault(resolvedMode);
     return false;
   }
-  TRAIN_CLASSES = names.map((name, id) => ({
-    name: String(name).trim().toLowerCase(),
-    id,
-  }));
+
+  if (isSegmentationMode(resolvedMode)) {
+    segmentationClassOrder = normalized;
+  } else {
+    detectionClassOrder = normalized;
+  }
   return true;
 }

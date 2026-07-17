@@ -11,9 +11,31 @@
   <div class="app">
     <header class="app-header" role="banner">
       <div class="app-header-left">
-        <span class="app-header-title">AI Train</span>
+        <div class="app-header-brand-row">
+          <span class="app-header-title">AI Train</span>
+          <span id="workspace-save-status" class="workspace-save-status" aria-live="polite"></span>
+        </div>
         <span class="app-header-dev">Developed by andreichernov200</span>
-        <span id="workspace-save-status" class="workspace-save-status" aria-live="polite"></span>
+      </div>
+      <div class="work-mode-switch" role="radiogroup" aria-label="Раздел сайта">
+        <button
+          type="button"
+          id="work-mode-detection"
+          class="work-mode-option is-active"
+          role="radio"
+          aria-checked="true"
+        >
+          Разметка
+        </button>
+        <button
+          type="button"
+          id="work-mode-segmentation"
+          class="work-mode-option"
+          role="radio"
+          aria-checked="false"
+        >
+          Анализ
+        </button>
       </div>
       <div class="app-header-progress" aria-label="Прогресс разметки">
         <div class="header-stat-row">
@@ -45,8 +67,25 @@
     <!-- Левая панель -->
     <div class="sidebar left">
       <button id="upload-btn">Загрузить фото / ZIP</button>
+      <button id="upload-video-btn" type="button">Загрузить видео</button>
       <button id="clear-btn">Очистить</button>
-      <button class="primary" id="run-btn">Запустить распознавание</button>
+      <div class="recognize-split" id="recognize-split">
+        <button class="primary recognize-main" id="run-btn">Распознать</button>
+        <button
+          type="button"
+          class="primary recognize-menu-toggle"
+          id="run-menu-toggle"
+          aria-label="Выбрать модели для запуска"
+          aria-haspopup="menu"
+          aria-expanded="false"
+          aria-controls="run-menu"
+        >▾</button>
+        <div id="run-menu" class="recognize-menu" hidden role="menu">
+          <button type="button" role="menuitem" data-run-mode="both">Detect + Seg</button>
+          <button type="button" role="menuitem" data-run-mode="detect">Только Detect</button>
+          <button type="button" role="menuitem" data-run-mode="seg">Только Seg</button>
+        </div>
+      </div>
 
       <section class="batch-images-panel" aria-label="Изображения в батче">
         <div class="batch-images-panel-head">
@@ -86,10 +125,10 @@
                   Сначала худшие
                 </button>
                 <button type="button" role="menuitem" class="batch-sort-item" data-batch-sort="bbox-count-desc">
-                  Сначала больше bbox
+                  Сначала больше аннотаций
                 </button>
                 <button type="button" role="menuitem" class="batch-sort-item" data-batch-sort="bbox-count-asc">
-                  Сначала меньше bbox
+                  Сначала меньше аннотаций
                 </button>
               </div>
             </div>
@@ -108,39 +147,127 @@
             aria-haspopup="menu"
             aria-controls="export-menu-panel"
           >
+            <span class="export-menu-toggle-icon" aria-hidden="true">⬇</span>
             Экспорт
             <span class="export-menu-chevron" aria-hidden="true">▾</span>
           </button>
           <div id="export-menu-panel" class="export-menu-panel" hidden role="menu">
-            <div class="export-menu-group-label">Текущий кадр</div>
-            <button type="button" role="menuitem" class="export-menu-item" data-export="current-jpg">
-              Фото с разметкой (.jpg)
-            </button>
-            <button type="button" role="menuitem" class="export-menu-item" data-export="current-yolo">
-              Разметка YOLO (.txt)
-            </button>
-            <button type="button" role="menuitem" class="export-menu-item" data-export="current-json">
-              Экспорт JSON
-            </button>
-            <div class="export-menu-group-label">Весь батч</div>
-            <button type="button" role="menuitem" class="export-menu-item" data-export="batch-png-clean">
-              PNG ZIP без разметки
-            </button>
-            <button type="button" role="menuitem" class="export-menu-item" data-export="batch-png-marked">
-              PNG ZIP с разметкой
-            </button>
-            <button type="button" role="menuitem" class="export-menu-item" data-export="batch-yolo-zip">
-              YOLO TXT (ZIP)
-            </button>
-            <button type="button" role="menuitem" class="export-menu-item" data-export="batch-project-zip">
-              ZIP полного проекта
-            </button>
+            <div class="export-menu-header">
+              <div class="export-menu-header-title">Выберите формат экспорта</div>
+              <div class="export-menu-header-sub">Откроется окно с настройками перед сохранением</div>
+            </div>
+
+            <div class="export-menu-group">
+              <div class="export-menu-group-label">
+                <span class="export-menu-group-icon" aria-hidden="true">🖼️</span>
+                Текущий кадр
+              </div>
+              <button type="button" role="menuitem" class="export-menu-item" data-export="current-jpg">
+                <span class="export-menu-item-icon" aria-hidden="true">🖼️</span>
+                <span class="export-menu-item-text">
+                  <span class="export-menu-item-title">Фото с разметкой</span>
+                  <span class="export-menu-item-desc">Снимок кадра с боксами/масками и подписями</span>
+                </span>
+                <span class="export-menu-item-tag">.jpg</span>
+              </button>
+              <button type="button" role="menuitem" class="export-menu-item" data-export="current-yolo-detect">
+                <span class="export-menu-item-icon" aria-hidden="true">📄</span>
+                <span class="export-menu-item-text">
+                  <span class="export-menu-item-title">YOLO Detect</span>
+                  <span class="export-menu-item-desc">BBox классов train и number</span>
+                </span>
+                <span class="export-menu-item-tag">.txt</span>
+              </button>
+              <button type="button" role="menuitem" class="export-menu-item" data-export="current-yolo-seg">
+                <span class="export-menu-item-icon" aria-hidden="true">🎨</span>
+                <span class="export-menu-item-text">
+                  <span class="export-menu-item-title">YOLO Seg</span>
+                  <span class="export-menu-item-desc">Полигоны классов body, autocoupler, axlebox, bogie и hose</span>
+                </span>
+                <span class="export-menu-item-tag">.txt</span>
+              </button>
+              <button type="button" role="menuitem" class="export-menu-item" data-export="current-annotation-json">
+                <span class="export-menu-item-icon" aria-hidden="true">🧾</span>
+                <span class="export-menu-item-text">
+                  <span class="export-menu-item-title">Аннотация JSON</span>
+                  <span class="export-menu-item-desc">Подробное описание объектов кадра</span>
+                </span>
+                <span class="export-menu-item-tag">.json</span>
+              </button>
+            </div>
+
+            <div class="export-menu-group">
+              <div class="export-menu-group-label">
+                <span class="export-menu-group-icon" aria-hidden="true">📦</span>
+                Весь батч
+              </div>
+              <button type="button" role="menuitem" class="export-menu-item" data-export="batch-png-clean">
+                <span class="export-menu-item-icon" aria-hidden="true">🖼️</span>
+                <span class="export-menu-item-text">
+                  <span class="export-menu-item-title">PNG без разметки</span>
+                  <span class="export-menu-item-desc">Исходные изображения батча, без боксов</span>
+                </span>
+                <span class="export-menu-item-tag">.zip</span>
+              </button>
+              <button type="button" role="menuitem" class="export-menu-item" data-export="batch-png-marked">
+                <span class="export-menu-item-icon" aria-hidden="true">🖍️</span>
+                <span class="export-menu-item-text">
+                  <span class="export-menu-item-title">PNG с разметкой</span>
+                  <span class="export-menu-item-desc">Изображения с нарисованными боксами/масками</span>
+                </span>
+                <span class="export-menu-item-tag">.zip</span>
+              </button>
+              <button type="button" role="menuitem" class="export-menu-item" data-export="batch-yolo-detect-zip">
+                <span class="export-menu-item-icon" aria-hidden="true">📄</span>
+                <span class="export-menu-item-text">
+                  <span class="export-menu-item-title">YOLO Detect</span>
+                  <span class="export-menu-item-desc">BBox train и number для всего батча</span>
+                </span>
+                <span class="export-menu-item-tag">.zip</span>
+              </button>
+              <button type="button" role="menuitem" class="export-menu-item" data-export="batch-yolo-seg-zip">
+                <span class="export-menu-item-icon" aria-hidden="true">🎨</span>
+                <span class="export-menu-item-text">
+                  <span class="export-menu-item-title">YOLO Seg</span>
+                  <span class="export-menu-item-desc">Полигоны пяти классов для всего батча</span>
+                </span>
+                <span class="export-menu-item-tag">.zip</span>
+              </button>
+              <button type="button" role="menuitem" class="export-menu-item" data-export="batch-annotations-zip">
+                <span class="export-menu-item-icon" aria-hidden="true">🧾</span>
+                <span class="export-menu-item-text">
+                  <span class="export-menu-item-title">Только аннотации JSON</span>
+                  <span class="export-menu-item-desc">Подробные данные без изображений</span>
+                </span>
+                <span class="export-menu-item-tag">.zip</span>
+              </button>
+              <button type="button" role="menuitem" class="export-menu-item" data-export="batch-crops-zip">
+                <span class="export-menu-item-icon" aria-hidden="true">✂️</span>
+                <span class="export-menu-item-text">
+                  <span class="export-menu-item-title">Кропы объектов</span>
+                  <span class="export-menu-item-desc">Вырезанные по bbox объекты, по папкам классов</span>
+                </span>
+                <span class="export-menu-item-tag">.zip</span>
+              </button>
+              <button type="button" role="menuitem" class="export-menu-item export-menu-item--featured" data-export="batch-project-zip">
+                <span class="export-menu-item-icon" aria-hidden="true">🗂️</span>
+                <span class="export-menu-item-text">
+                  <span class="export-menu-item-title">
+                    Полный проект
+                    <span class="export-menu-item-badge">всё включено</span>
+                  </span>
+                  <span class="export-menu-item-desc">Изображения + YOLO + JSON + метаданные проекта</span>
+                </span>
+                <span class="export-menu-item-tag">.zip</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- Скрытый input: один или несколько изображений -->
-      <input type="file" id="file-input" accept="image/*,.zip,application/zip" multiple style="display: none;">
+      <input type="file" id="file-input" accept="image/*,.zip,application/zip,.txt,text/plain" multiple style="display: none;">
+      <input type="file" id="video-file-input" accept="video/*" style="display: none;">
     </div>
 
     <!-- Центр -->
@@ -181,7 +308,7 @@
                 <div
                   id="class-chips-root"
                   class="class-chips-strip"
-                  aria-label="Классы: сумма bbox по всему батчу"
+                  aria-label="Классы: сумма аннотаций по всему батчу"
                 ></div>
               </div>
             </div>
@@ -199,6 +326,12 @@
                   <button type="button" id="editor-tool-add" class="editor-tool-chip">
                     Добавить bbox
                   </button>
+                  <button type="button" id="editor-tool-crop" class="editor-tool-chip">
+                    Обрезать
+                  </button>
+                  <button type="button" id="editor-tool-add-polygon" class="editor-tool-chip">
+                    Добавить полигон
+                  </button>
                 </div>
               </div>
             </div>
@@ -206,8 +339,16 @@
         </div>
 
         <div class="image-frame" id="image-frame">
-          <span id="placeholder-text">Изображение</span>
+          <span id="placeholder-text">Перетащите фото, TXT (YOLO) или Ctrl+V</span>
           <div class="image-stack" id="image-stack">
+            <video
+              id="preview-video"
+              class="preview-video"
+              controls
+              playsinline
+              preload="metadata"
+              hidden
+            ></video>
             <img id="preview-image" alt="Загруженное изображение">
             <canvas id="overlay-canvas"></canvas>
           </div>
@@ -241,6 +382,32 @@
               <span class="viewer-nav-btn-icon" aria-hidden="true">→</span>
             </button>
           </div>
+          <div
+            id="video-toolbar"
+            class="viewer-toolbar-row viewer-toolbar-row--video"
+            hidden
+            role="group"
+            aria-label="Видео"
+          >
+            <label class="video-toolbar-label" for="video-frame-interval">Интервал</label>
+            <select id="video-frame-interval" class="video-frame-interval-select" title="Шаг между извлекаемыми кадрами">
+              <option value="0.5">0.5 с</option>
+              <option value="1" selected>1 с</option>
+              <option value="2">2 с</option>
+              <option value="5">5 с</option>
+            </select>
+            <button type="button" id="video-extract-btn" class="viewer-action-btn viewer-action-btn--secondary">
+              Извлечь кадры
+            </button>
+            <button
+              type="button"
+              id="video-show-btn"
+              class="viewer-action-btn viewer-action-btn--secondary"
+              hidden
+            >
+              Показать видео
+            </button>
+          </div>
           <div class="viewer-toolbar-row viewer-toolbar-row--actions">
             <button
               type="button"
@@ -267,7 +434,7 @@
 
     <!-- Правая панель -->
     <div class="sidebar right">
-      <h3>Найденные узлы локомотива</h3>
+      <h3>Аннотации на кадре</h3>
       <div class="confidence-filter" aria-label="Порог уверенности модели">
         <div class="confidence-filter-head">
           <label class="confidence-filter-title" for="confidence-filter-range">
@@ -344,13 +511,72 @@
     aria-labelledby="export-summary-title"
     tabindex="-1"
   >
-    <h3 id="export-summary-title" class="export-summary-title">Экспорт</h3>
-    <p id="export-summary-subtitle" class="export-summary-subtitle"></p>
+    <div class="export-summary-header">
+      <span id="export-summary-icon" class="export-summary-icon" aria-hidden="true">📦</span>
+      <div class="export-summary-heading">
+        <div class="export-summary-heading-top">
+          <h3 id="export-summary-title" class="export-summary-title">Экспорт</h3>
+          <span id="export-summary-scope" class="export-summary-scope"></span>
+        </div>
+        <p id="export-summary-subtitle" class="export-summary-subtitle"></p>
+      </div>
+    </div>
     <div id="export-summary-body" class="export-summary-body"></div>
+    <div id="export-naming-row" class="export-naming-row" hidden>
+      <label class="export-naming-label" for="export-start-number">Начальный номер</label>
+      <input
+        type="number"
+        id="export-start-number"
+        class="export-start-number-input"
+        min="1"
+        step="1"
+        value="1"
+        inputmode="numeric"
+        title="С какого числа начинать имена файлов в архиве"
+      />
+      <span id="export-naming-preview" class="export-naming-preview" aria-live="polite"></span>
+    </div>
+    <div id="export-category-numbering" class="export-category-numbering" hidden></div>
+    <div id="export-review-filter" class="export-review-filter" hidden>
+      <div class="export-review-filter-title">Какие кадры включать</div>
+      <label class="export-review-option">
+        <input type="radio" name="export-review-mode" id="export-review-mode-detected" value="detected" checked />
+        <span>Нейросеть и вручную проверенные (где есть разметка)</span>
+      </label>
+      <label class="export-review-option">
+        <input type="radio" name="export-review-mode" id="export-review-mode-manual" value="manual" />
+        <span>Только вручную проверенные</span>
+      </label>
+      <label class="export-review-option export-review-option-sub">
+        <input type="checkbox" id="export-review-include-unreviewed" checked />
+        <span>Включить непроверенные кадры</span>
+      </label>
+      <div id="export-review-filter-hint" class="export-review-filter-hint" aria-live="polite"></div>
+    </div>
+    <div id="export-yolo-options" class="export-yolo-options" hidden>
+      <label class="export-review-option">
+        <input type="checkbox" id="export-yolo-empty-labels" />
+        <span>Включить кадры без разметки (negative samples)</span>
+      </label>
+      <div id="export-yolo-options-hint" class="export-review-filter-hint" aria-live="polite">
+        У каждого кадра будет файл разметки — пустой, если объектов нет.
+      </div>
+    </div>
+    <div id="export-project-options" class="export-yolo-options" hidden>
+      <label class="export-review-option">
+        <input type="checkbox" id="export-project-include-annotations" checked />
+        <span>Включить папку annotations/ (JSON-разметка каждого кадра)</span>
+      </label>
+      <div id="export-project-options-hint" class="export-review-filter-hint" aria-live="polite">
+        Без этой папки в архиве останутся только images/ и labels/ (YOLO .txt).
+      </div>
+    </div>
     <div class="export-summary-actions">
-      <button type="button" id="export-summary-cancel">Отмена</button>
+      <button type="button" id="export-summary-cancel">
+        <span aria-hidden="true">✕</span> Отмена
+      </button>
       <button type="button" class="primary" id="export-summary-confirm">
-        Экспортировать
+        <span aria-hidden="true">⬇</span> Экспортировать
       </button>
     </div>
   </div>
@@ -396,13 +622,29 @@
       <div><dt>R</dt><dd>отметить кадр проверенным</dd></div>
       <div><dt>S</dt><dd>пропустить кадр</dd></div>
       <div><dt>E</dt><dd>переключить режим просмотра / редактирования</dd></div>
-      <div><dt>A</dt><dd>добавить bbox</dd></div>
-      <div><dt>Backspace</dt><dd>удалить выбранный bbox</dd></div>
-      <div><dt>1</dt><dd>класс body</dd></div>
-      <div><dt>2</dt><dd>класс autocoupler</dd></div>
-      <div><dt>3</dt><dd>класс axlebox</dd></div>
-      <div><dt>4</dt><dd>класс bogie</dd></div>
+      <div><dt>A</dt><dd>добавить фигуру типа выбранной; без выбора — bbox</dd></div>
+      <div><dt>M</dt><dd>назначить категорию кадру</dd></div>
+      <div><dt>Backspace</dt><dd>удалить выбранный bbox / полигон</dd></div>
+      <div>
+        <dt>Alt/Ctrl + клик</dt>
+        <dd>
+          по вершине полигона — удалить точку; по ребру полигона — вставить новую точку
+        </dd>
+      </div>
+      <div>
+        <dt>Enter</dt>
+        <dd>завершить рисуемый полигон (инструмент «Добавить полигон»)</dd>
+      </div>
+      <div>
+        <dt>1–2 (Detect)</dt>
+        <dd>класс выбранного или следующего bbox — train / number</dd>
+      </div>
+      <div>
+        <dt>1–5 (Seg)</dt>
+        <dd>класс выбранной или следующей маски — body / autocoupler / axlebox / bogie / hose</dd>
+      </div>
       <div><dt>Esc</dt><dd>отменить текущий инструмент</dd></div>
+      <div><dt>Ctrl+V</dt><dd>вставить изображение из буфера</dd></div>
       <div><dt>Ctrl+Z / Ctrl+Y</dt><dd>отменить / повторить действие</dd></div>
     </dl>
     <div class="hotkeys-help-actions">
@@ -411,9 +653,52 @@
   </div>
 </div>
 
+<div
+  id="category-modal-overlay"
+  class="category-modal-overlay"
+  hidden
+  role="presentation"
+>
+  <div
+    class="category-modal-dialog"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="category-modal-title"
+    tabindex="-1"
+  >
+    <h3 id="category-modal-title" class="category-modal-title">Категория кадра</h3>
+    <p class="category-modal-subtitle">
+      Выберите категорию для текущего кадра или создайте новую.
+    </p>
+    <div class="category-modal-input-row">
+      <input
+        type="text"
+        id="category-new-input"
+        class="category-new-input"
+        placeholder="Новая категория"
+        maxlength="64"
+      />
+      <button type="button" id="category-add-btn">Добавить</button>
+    </div>
+    <div id="category-modal-list" class="category-modal-list" role="listbox" aria-label="Категории"></div>
+    <div class="category-modal-actions">
+      <button type="button" id="category-clear-btn">Сбросить</button>
+      <button type="button" id="category-modal-close" class="primary">Готово</button>
+    </div>
+  </div>
+</div>
+
+<div
+  id="mask-context-menu"
+  class="mask-context-menu"
+  hidden
+  role="menu"
+  aria-label="Действия с маской"
+></div>
 </body>
+
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script type="module" src="/static/scripts/app/main.js"></script>
+<script type="module" src="/static/scripts/app/main.js?v=20260701-export-annot"></script>
 </html>
 
 <!-- python -m uvicorn server:app --reload --host 127.0.0.1 --port 8000 -->
