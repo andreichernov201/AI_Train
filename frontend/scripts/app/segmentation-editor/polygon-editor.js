@@ -146,10 +146,33 @@ export function createPolygonEditor(deps) {
     deps.requestDraw();
   }
 
-  function handleAddPolygonPointerDown(geo, ox, oy) {
+  function handleAddPolygonPointerDown(geo, ox, oy, e) {
     if (!draft) {
       startAddPolygonDraft(geo, ox, oy);
       return true;
+    }
+    const modifier = !!(e?.altKey || e?.ctrlKey || e?.metaKey);
+    if (modifier) {
+      const vertexIndex = hitTestPolygonVertex(geo, ox, oy, draft.points);
+      if (vertexIndex != null) {
+        draft.points.splice(vertexIndex, 1);
+        if (!draft.points.length) {
+          draft = null;
+        } else {
+          const { ix, iy } = overlayToImagePoint(geo, ox, oy);
+          draft.cursor = clampPoint(geo, ix, iy);
+        }
+        deps.requestDraw();
+        return true;
+      }
+
+      const edge = hitTestPolygonEdge(geo, ox, oy, draft.points);
+      if (edge) {
+        draft.points.splice(edge.index + 1, 0, edge.insertAt);
+        draft.cursor = edge.insertAt;
+        deps.requestDraw();
+        return true;
+      }
     }
     const first = draft.points[0];
     const firstOverlay = imageToOverlayPoint(geo, first[0], first[1]);
@@ -250,7 +273,7 @@ export function createPolygonEditor(deps) {
 
     const tool = deps.getEditorTool();
     if (tool === "addPolygon") {
-      return handleAddPolygonPointerDown(geo, ox, oy);
+      return handleAddPolygonPointerDown(geo, ox, oy, e);
     }
     if (tool === "select") {
       return handleSelectPointerDown(geo, ox, oy, e);
@@ -332,7 +355,15 @@ export function createPolygonEditor(deps) {
   function cursorClassFor(geo, ox, oy, altKey) {
     if (!deps.isEditMode()) return null;
     const tool = deps.getEditorTool();
-    if (tool === "addPolygon") return "overlay-cursor-crosshair";
+    if (tool === "addPolygon") {
+      if (draft && altKey && ox != null && oy != null) {
+        const vertexIndex = hitTestPolygonVertex(geo, ox, oy, draft.points);
+        if (vertexIndex != null) return "overlay-cursor-remove-vertex";
+        const edge = hitTestPolygonEdge(geo, ox, oy, draft.points);
+        if (edge) return "overlay-cursor-insert-vertex";
+      }
+      return "overlay-cursor-crosshair";
+    }
     if (tool !== "select") return null;
     if (ox == null || oy == null) return null;
     const det = deps.getSelectedDetection();

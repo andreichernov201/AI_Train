@@ -4,12 +4,12 @@ from ultralytics import YOLO
 
 
 def main() -> None:
-    # Все относительные пути считаются от папки, где находится train.py.
-    base_dir = Path(__file__).resolve().parent
+    # Пути к локальным данным и результатам считаются от корня проекта.
+    base_dir = Path(__file__).resolve().parents[2]
 
     data_path = base_dir / "dataset" / "detection" / "data.yaml"
     project_dir = base_dir / "runs" / "detect"
-    run_name = "locomotive_consist_yolo11m_1280"
+    run_name = "train"
 
     if not data_path.is_file():
         raise FileNotFoundError(

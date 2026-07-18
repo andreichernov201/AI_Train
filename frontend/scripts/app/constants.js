@@ -1,8 +1,10 @@
-export const MAX_DIRECT_IMAGES = 200;
+export const MAX_DIRECT_IMAGES = 500;
 export const MAX_ZIP_IMAGES = 2000;
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 /** Один файл видео в браузере (извлечение кадров в батч). */
-export const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024;
+/** Максимум кадров из видео в одном проекте. */
+export const MAX_VIDEO_FRAMES = 2000;
 /** Интервал между кадрами при извлечении из видео (сек). */
 export const DEFAULT_VIDEO_FRAME_INTERVAL_SEC = 1;
 export const ZIP_IMAGE_EXT_RE = /\.(jpe?g|png|webp)$/i;

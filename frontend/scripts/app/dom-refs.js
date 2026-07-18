@@ -19,6 +19,7 @@
  *   viewerNext: HTMLButtonElement,
  *   viewerCounter: HTMLElement,
  *   markReviewedBtn: HTMLButtonElement,
+ *   unmarkReviewedBtn: HTMLButtonElement,
  *   skipImageBtn: HTMLButtonElement,
  *   headerReviewedLine: HTMLElement,
  *   workspaceSaveStatus: HTMLElement,
@@ -62,6 +63,7 @@
  *   viewerFilename: HTMLElement,
  *   videoToolbar: HTMLElement,
  *   videoFrameInterval: HTMLSelectElement,
+ *   videoBlurEvery: HTMLInputElement,
  *   videoExtractBtn: HTMLButtonElement,
  *   videoShowBtn: HTMLButtonElement,
  *   batchImageListRoot: HTMLElement,
@@ -113,6 +115,7 @@ export function collectDomRefs() {
   const viewerNext = document.getElementById("viewer-next");
   const viewerCounter = document.getElementById("viewer-counter");
   const markReviewedBtn = document.getElementById("mark-reviewed-btn");
+  const unmarkReviewedBtn = document.getElementById("unmark-reviewed-btn");
   const skipImageBtn = document.getElementById("skip-image-btn");
   const headerReviewedLine = document.getElementById("header-reviewed-line");
   const workspaceSaveStatus = document.getElementById("workspace-save-status");
@@ -162,6 +165,7 @@ export function collectDomRefs() {
   const viewerFilename = document.getElementById("viewer-filename");
   const videoToolbar = document.getElementById("video-toolbar");
   const videoFrameInterval = document.getElementById("video-frame-interval");
+  const videoBlurEvery = document.getElementById("video-blur-every");
   const videoExtractBtn = document.getElementById("video-extract-btn");
   const videoShowBtn = document.getElementById("video-show-btn");
   const batchImageListRoot = document.getElementById("batch-image-list-root");
@@ -210,6 +214,7 @@ export function collectDomRefs() {
     !viewerNext ||
     !viewerCounter ||
     !markReviewedBtn ||
+    !unmarkReviewedBtn ||
     !skipImageBtn ||
     !headerReviewedLine ||
     !workspaceSaveStatus ||
@@ -257,6 +262,7 @@ export function collectDomRefs() {
     !viewerFilename ||
     !videoToolbar ||
     !videoFrameInterval ||
+    !videoBlurEvery ||
     !videoExtractBtn ||
     !videoShowBtn ||
     !batchImageListRoot ||
@@ -304,6 +310,7 @@ export function collectDomRefs() {
     viewerNext,
     viewerCounter,
     markReviewedBtn,
+    unmarkReviewedBtn,
     skipImageBtn,
     headerReviewedLine,
     workspaceSaveStatus,
@@ -347,6 +354,7 @@ export function collectDomRefs() {
     viewerFilename,
     videoToolbar,
     videoFrameInterval,
+    videoBlurEvery,
     videoExtractBtn,
     videoShowBtn,
     batchImageListRoot,

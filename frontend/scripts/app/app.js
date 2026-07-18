@@ -3,6 +3,7 @@ import {
   MAX_ZIP_IMAGES,
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
+  MAX_VIDEO_FRAMES,
   ZIP_IMAGE_EXT_RE,
   DATA_YAML_RE,
   WORKSPACE_AUTOSAVE_DELAY_MS,
@@ -105,6 +106,7 @@ export function startApp(refs) {
     viewerNext,
     viewerCounter,
     markReviewedBtn,
+    unmarkReviewedBtn,
     skipImageBtn,
     headerReviewedLine,
     workspaceSaveStatus,
@@ -148,6 +150,7 @@ export function startApp(refs) {
     viewerFilename,
     videoToolbar,
     videoFrameInterval,
+    videoBlurEvery,
     videoExtractBtn,
     videoShowBtn,
     batchImageListRoot,
@@ -240,6 +243,7 @@ export function startApp(refs) {
    *     trainClassOrder: string[],
    *     editorMode: "review"|"edit",
    *     editorTool: "select"|"addBox"|"crop"|"addPolygon",
+   *     lastPolygonClassName: string,
  *     inferenceMode: InferenceMode,
  *     runSelection: "both"|"detect"|"seg",
    *   }
@@ -353,6 +357,20 @@ export function startApp(refs) {
         );
       },
       handler: (context) => focusMaskSimplifyFromContext(context),
+    },
+    {
+      id: "bring-to-front",
+      label: "На передний план",
+      icon: "⇧",
+      isAvailable: (context) => canMoveSegMaskLayer(context, "front"),
+      handler: (context) => moveSegMaskLayer(context, "front"),
+    },
+    {
+      id: "send-to-back",
+      label: "На задний план",
+      icon: "⇩",
+      isAvailable: (context) => canMoveSegMaskLayer(context, "back"),
+      handler: (context) => moveSegMaskLayer(context, "back"),
     },
   ];
   const maskMenu = createMaskContextMenu({
@@ -843,6 +861,9 @@ export function startApp(refs) {
     d.cls_name = targetClass.name;
     d.source = "human";
     d.annotation_type = annotationType;
+    if (annotationType === "seg") {
+      batchState.settings.lastPolygonClassName = targetClass.name;
+    }
     markAnnotationTypeReviewed(im, annotationType);
     im.edited = true;
     im.reviewed = false;
@@ -889,9 +910,13 @@ export function startApp(refs) {
 
   function syncVideoToolbar() {
     const hasVideo = !!videoState;
+    const controlsDisabled =
+      !hasVideo || videoExtractInFlight || detectAllInFlight;
     videoToolbar.hidden = !hasVideo;
     videoShowBtn.hidden = !hasVideo || viewerMode === "video";
-    videoExtractBtn.disabled = !hasVideo || videoExtractInFlight || detectAllInFlight;
+    videoExtractBtn.disabled = controlsDisabled;
+    videoFrameInterval.disabled = controlsDisabled;
+    videoBlurEvery.disabled = controlsDisabled;
   }
 
   function showVideoView() {
@@ -974,12 +999,32 @@ export function startApp(refs) {
       await waitForVideoMetadata(previewVideo);
       previewVideo.pause();
       const intervalSec = Number.parseFloat(videoFrameInterval.value) || 1;
+      const parsedBlurEvery = Number.parseInt(videoBlurEvery.value, 10);
+      const blurEvery =
+        Number.isInteger(parsedBlurEvery) && parsedBlurEvery >= 2
+          ? Math.min(1000, parsedBlurEvery)
+          : 0;
+      videoBlurEvery.value = String(blurEvery);
+      const remainingFrameSlots = Math.max(
+        0,
+        MAX_VIDEO_FRAMES - batchState.images.length
+      );
+      if (remainingFrameSlots === 0) {
+        showToast(`Достигнут лимит ${MAX_VIDEO_FRAMES} кадров в проекте.`, {
+          type: "warning",
+          durationMs: 4200,
+        });
+        return false;
+      }
       const frames = await extractFramesFromVideoElement(previewVideo, {
         intervalSec,
-        maxFrames: MAX_DIRECT_IMAGES - batchState.images.length,
+        maxFrames: remainingFrameSlots,
+        blurEvery,
         baseName: videoState.fileName,
-        onProgress: (done, total) => {
-          videoExtractBtn.textContent = `Извлекаем… ${done}/${total}`;
+        onProgress: (done, total, detail) => {
+          const kind = detail?.selection === "blur" ? "смазанный" : "чёткий";
+          videoExtractBtn.textContent =
+            "Выбираем " + kind + "… " + done + "/" + total;
         },
       });
 
@@ -1002,17 +1047,27 @@ export function startApp(refs) {
         skippedOverSizeNames: [],
         skippedOverBatchLimit: 0,
         skippedOverBatchLimitNames: [],
-        importLimit: MAX_DIRECT_IMAGES,
+        importLimit: MAX_VIDEO_FRAMES,
         skippedService: 0,
         skippedServiceNames: [],
         skippedUnsupported: 0,
         skippedUnsupportedNames: [],
       });
 
-      showToast(`Из видео извлечено кадров: ${frames.length}.`, {
-        type: "success",
-        durationMs: 3400,
-      });
+      const blurredCount = frames.filter(
+        (frame) => frame.selection === "blur"
+      ).length;
+      showToast(
+        "Из видео извлечено кадров: " +
+          frames.length +
+          ". Чёткие выбраны автоматически" +
+          (blurredCount ? "; смазанных: " + blurredCount : "") +
+          ".",
+        {
+          type: "success",
+          durationMs: 4200,
+        }
+      );
       return true;
     } catch (e) {
       showToast(String(e?.message || e), { type: "error", durationMs: 4800 });
@@ -3034,7 +3089,7 @@ export function startApp(refs) {
       const metaEl = document.createElement("span");
       metaEl.className = "bic-meta";
       const nBoxes = Array.isArray(im.detections) ? im.detections.length : 0;
-      metaEl.textContent = nBoxes > 0 ? `${nBoxes}\u00A0аннот.` : "";
+      metaEl.textContent = nBoxes > 0 ? `${nBoxes}\u00A0аннотаций` : "";
 
       const categoryLabel = normalizeImageCategory(im.category ?? "");
 
@@ -3074,6 +3129,7 @@ export function startApp(refs) {
       updateBatchNavUi();
       return;
     }
+    polygonEditor.cancel();
     pointerInteraction = null;
     clearAddBoxCrosshairOverlayPx();
     imageUndoStack.length = 0;
@@ -3105,6 +3161,7 @@ export function startApp(refs) {
       viewerPrev.disabled = true;
       viewerNext.disabled = true;
       markReviewedBtn.disabled = true;
+      unmarkReviewedBtn.disabled = true;
       skipImageBtn.disabled = true;
       syncVideoToolbar();
       return;
@@ -3115,6 +3172,7 @@ export function startApp(refs) {
     viewerPrev.disabled = idx <= 0;
     viewerNext.disabled = idx >= n - 1;
     markReviewedBtn.disabled = !im || im.reviewed === true;
+    unmarkReviewedBtn.disabled = !im || im.reviewed !== true;
     skipImageBtn.disabled =
       !n || !im || im.status === "skipped" || im.reviewed === true;
     syncVideoToolbar();
@@ -3272,6 +3330,7 @@ export function startApp(refs) {
   function clearAll(persist = false) {
     maskMenu.close();
     closeRunMenu();
+    polygonEditor.cancel();
     revokeBatchObjectUrls();
     pointerInteraction = null;
     clearAddBoxCrosshairOverlayPx();
@@ -4059,6 +4118,14 @@ export function startApp(refs) {
 
   document.addEventListener("paste", (e) => {
     if (isTypingInteractionTarget(e.target)) return;
+    if (
+      !importSummaryOverlay.hidden ||
+      !exportSummaryOverlay.hidden ||
+      !categoryModalOverlay.hidden ||
+      !hotkeysHelpOverlay.hidden
+    ) {
+      return;
+    }
     const images = clipboardImageFiles(e);
     if (!images.length) return;
     e.preventDefault();
@@ -4790,6 +4857,51 @@ export function startApp(refs) {
     return null;
   }
 
+  function canMoveSegMaskLayer({ imageId, detId }, direction) {
+    const im = currentImageItem();
+    if (!editorModeIsEdit() || im?.id !== imageId) return false;
+    const masks = im.detections.filter(isSegAnnotation);
+    const index = masks.findIndex((d) => d.id === detId);
+    if (index < 0 || masks.length < 2) return false;
+    return direction === "front" ? index < masks.length - 1 : index > 0;
+  }
+
+  function moveSegMaskLayer(context, direction) {
+    if (!canMoveSegMaskLayer(context, direction)) return false;
+    const im = currentImageItem();
+    if (!im) return false;
+
+    const maskSlots = [];
+    const masks = [];
+    for (let i = 0; i < im.detections.length; i++) {
+      if (!isSegAnnotation(im.detections[i])) continue;
+      maskSlots.push(i);
+      masks.push(im.detections[i]);
+    }
+
+    const from = masks.findIndex((d) => d.id === context.detId);
+    const to = direction === "front" ? masks.length - 1 : 0;
+    if (from < 0 || from === to) return false;
+
+    pushUndoCheckpoint();
+    const [moved] = masks.splice(from, 1);
+    masks.splice(to, 0, moved);
+    maskSlots.forEach((slot, index) => {
+      im.detections[slot] = masks[index];
+    });
+
+    im.edited = true;
+    im.reviewed = false;
+    markAnnotationTypeReviewed(im, "seg");
+    setSelectedDetectionId(context.detId);
+    touchBatch();
+    scheduleWorkspaceAutosave(0);
+    updateBatchNavUi();
+    buildRightPanel();
+    draw();
+    return true;
+  }
+
   function focusMaskSimplifyFromContext({ imageId, detId }) {
     const im = currentImageItem();
     const det = im?.detections.find((d) => d.id === detId);
@@ -5050,19 +5162,36 @@ export function startApp(refs) {
     const classes = classesForAnnotationType(type);
     if (hotkeyPreferredNewBboxClassName) {
       const hit = classes.find((t) => t.name === hotkeyPreferredNewBboxClassName);
-      if (hit) return hit;
+      if (hit) {
+        if (type === "seg") batchState.settings.lastPolygonClassName = hit.name;
+        return hit;
+      }
+    }
+    if (type === "seg") {
+      const remembered = classes.find(
+        (t) => t.name === batchState.settings.lastPolygonClassName
+      );
+      if (remembered) return remembered;
     }
     const sid = im.panel.selectedDetectionId;
     if (sid != null) {
       const d = im.detections.find((x) => x.id === sid);
       if (d && annotationTypeOf(d) === type) {
         const byName = classes.find((t) => t.name === d.cls_name);
-        if (byName) return byName;
+        if (byName) {
+          if (type === "seg") batchState.settings.lastPolygonClassName = byName.name;
+          return byName;
+        }
         const byId = classes.find((t) => t.id === d.cls_id);
-        if (byId) return byId;
+        if (byId) {
+          if (type === "seg") batchState.settings.lastPolygonClassName = byId.name;
+          return byId;
+        }
       }
     }
-    return classes[0];
+    const fallback = classes[0];
+    if (type === "seg") batchState.settings.lastPolygonClassName = fallback.name;
+    return fallback;
   }
 
   function tryDeleteSelectedDetection() {
@@ -6406,8 +6535,17 @@ export function startApp(refs) {
 
     const filtered = detections.filter((d) => d.conf >= confThreshold());
 
-    const grouped = groupByCategory(filtered);
-    const cats = Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b));
+    const annotationSections = [
+      { type: "seg", title: "Segmentation", matches: isSegAnnotation },
+      { type: "detect", title: "Detect", matches: isDetectAnnotation },
+    ].map((section) => {
+      const grouped = groupByCategory(filtered.filter(section.matches));
+      return {
+        ...section,
+        grouped,
+        cats: Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b)),
+      };
+    });
 
     const renderGroupsEmpty = (message) => {
       const empty = document.createElement("div");
@@ -6416,7 +6554,9 @@ export function startApp(refs) {
       groupsRoot.appendChild(empty);
     };
 
-    const visibleCats = cats.filter((c) => !classHidden(c));
+    const visibleCats = annotationSections.flatMap((section) =>
+      section.cats.filter((c) => !classHidden(c))
+    );
     if (!visibleCats.length) {
       if (!im) {
         renderGroupsEmpty("Выберите кадр в списке слева.");
@@ -6435,8 +6575,38 @@ export function startApp(refs) {
       }
     }
 
-    for (const cat of cats) {
-      if (classHidden(cat)) continue;
+    for (const section of annotationSections) {
+      const sectionCats = section.cats.filter((cat) => !classHidden(cat));
+      if (!sectionCats.length) continue;
+
+      const sectionEl = document.createElement("section");
+      sectionEl.className =
+        "annotation-type-block annotation-type-block--" + section.type;
+
+      const sectionHeader = document.createElement("div");
+      sectionHeader.className = "annotation-type-header";
+
+      const sectionTitle = document.createElement("span");
+      sectionTitle.className = "annotation-type-title";
+      sectionTitle.textContent = section.title;
+
+      const sectionCount = document.createElement("span");
+      sectionCount.className = "annotation-type-count";
+      sectionCount.textContent = String(
+        sectionCats.reduce(
+          (sum, cat) => sum + (section.grouped.get(cat)?.length ?? 0),
+          0
+        )
+      );
+
+      sectionHeader.appendChild(sectionTitle);
+      sectionHeader.appendChild(sectionCount);
+      sectionEl.appendChild(sectionHeader);
+
+      const sectionItems = document.createElement("div");
+      sectionItems.className = "annotation-type-items";
+
+      for (const cat of sectionCats) {
 
       if (!categoryState.has(cat)) {
         categoryState.set(cat, { enabled: true, collapsed: false });
@@ -6477,7 +6647,7 @@ export function startApp(refs) {
 
       const count = document.createElement("span");
       count.className = "group-count";
-      count.textContent = String(grouped.get(cat).length);
+      count.textContent = String(section.grouped.get(cat).length);
 
       const chevron = document.createElement("span");
       chevron.className = "group-chevron";
@@ -6496,7 +6666,7 @@ export function startApp(refs) {
       const items = document.createElement("div");
       items.className = "group-items";
 
-      for (const d of grouped.get(cat)) {
+      for (const d of section.grouped.get(cat)) {
         if (!detEnabled.has(d.id)) detEnabled.set(d.id, true);
 
         const row = document.createElement("div");
@@ -6565,7 +6735,11 @@ export function startApp(refs) {
 
       details.appendChild(summary);
       details.appendChild(items);
-      groupsRoot.appendChild(details);
+        sectionItems.appendChild(details);
+      }
+
+      sectionEl.appendChild(sectionItems);
+      groupsRoot.appendChild(sectionEl);
     }
     syncTrainClassesUi();
     buildInspector();
@@ -6665,8 +6839,34 @@ export function startApp(refs) {
     if (next !== null) selectBatchIndex(next);
   }
 
+  function applyUnmarkReviewedFromToolbar() {
+    const im = currentImageItem();
+    if (!im || im.reviewed !== true) return;
+    const idx = batchState.currentIndex;
+    const otherIndex =
+      idx < batchState.images.length - 1 ? idx + 1 : idx > 0 ? idx - 1 : null;
+    im.modelStates = normalizeModelStates(im.modelStates);
+    const updatedAt = new Date().toISOString();
+    for (const state of Object.values(im.modelStates)) {
+      if (state.status !== "reviewed") continue;
+      state.status = "ready";
+      state.error = null;
+      state.updatedAt = updatedAt;
+      state.revision = (Number(state.revision) || 0) + 1;
+    }
+    syncLegacyImageState(im, { preserveSkipped: false });
+    touchBatch();
+    scheduleWorkspaceAutosave(0);
+    updateBatchNavUi();
+    if (otherIndex !== null) selectBatchIndex(otherIndex);
+  }
+
   markReviewedBtn.addEventListener("click", () => {
     applyMarkReviewedFromToolbar();
+  });
+
+  unmarkReviewedBtn.addEventListener("click", () => {
+    applyUnmarkReviewedFromToolbar();
   });
 
   skipImageBtn.addEventListener("click", () => {
@@ -6685,6 +6885,15 @@ export function startApp(refs) {
     if (e.code === "Escape" && !hotkeysHelpOverlay.hidden) {
       closeHotkeysHelp();
       e.preventDefault();
+      return;
+    }
+
+    if (
+      !importSummaryOverlay.hidden ||
+      !exportSummaryOverlay.hidden ||
+      !categoryModalOverlay.hidden ||
+      !hotkeysHelpOverlay.hidden
+    ) {
       return;
     }
 
@@ -6708,9 +6917,6 @@ export function startApp(refs) {
       }
       return;
     }
-    if (!importSummaryOverlay.hidden || !exportSummaryOverlay.hidden) return;
-    if (!categoryModalOverlay.hidden) return;
-    if (!hotkeysHelpOverlay.hidden) return;
     if (typing) return;
 
     const code = e.code;
@@ -6747,7 +6953,8 @@ export function startApp(refs) {
     }
 
     if (code === "KeyR") {
-      applyMarkReviewedFromToolbar();
+      if (e.shiftKey) applyUnmarkReviewedFromToolbar();
+      else applyMarkReviewedFromToolbar();
       e.preventDefault();
       return;
     }
@@ -6772,6 +6979,20 @@ export function startApp(refs) {
       maskMenu.close();
       batchState.settings.editorMode = "edit";
       batchState.settings.editorTool = isSegmentationMode() ? "addPolygon" : "addBox";
+      pointerInteraction = null;
+      polygonEditor.cancel();
+      touchBatch();
+      syncEditorChrome();
+      buildInspector();
+      buildRightPanel();
+      draw();
+      e.preventDefault();
+      return;
+    }
+    if (code === "KeyW") {
+      maskMenu.close();
+      batchState.settings.editorMode = "edit";
+      batchState.settings.editorTool = "addPolygon";
       pointerInteraction = null;
       polygonEditor.cancel();
       touchBatch();
@@ -6809,6 +7030,19 @@ export function startApp(refs) {
     ) {
       const tc = currentTrainClasses()[classIdx];
       if (tc) {
+        if (
+          batchState.settings.editorTool === "addBox" ||
+          batchState.settings.editorTool === "addPolygon"
+        ) {
+          hotkeyPreferredNewBboxClassName = tc.name;
+          if (batchState.settings.editorTool === "addPolygon") {
+            batchState.settings.lastPolygonClassName = tc.name;
+            touchBatch();
+            scheduleWorkspaceAutosave(0);
+          }
+          e.preventDefault();
+          return;
+        }
         const im = currentImageItem();
         const sid = im?.panel.selectedDetectionId ?? null;
         const activeType = editorAnnotationType();
@@ -6822,14 +7056,6 @@ export function startApp(refs) {
             e.preventDefault();
             return;
           }
-        }
-        if (
-          batchState.settings.editorTool === "addBox" ||
-          batchState.settings.editorTool === "addPolygon"
-        ) {
-          hotkeyPreferredNewBboxClassName = tc.name;
-          e.preventDefault();
-          return;
         }
       }
       return;

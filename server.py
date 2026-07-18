@@ -15,10 +15,9 @@ FRONTEND_DIR = os.path.join(ROOT_DIR, "frontend")
 RUNS_DETECT_DIR = os.path.join(ROOT_DIR, "runs", "detect")
 RUNS_SEGMENT_DIR = os.path.join(ROOT_DIR, "runs", "segmentation")
 YOLO_SEG_DIR = os.path.join(ROOT_DIR, "yolo-seg")
-# Актуальный прогон detect (см. train.py name=…)
-DEFAULT_DETECT_RUN_NAME = "locomotive_consist_yolo11m_1280-3"
+# Базовый путь; при его отсутствии выбирается последний доступный прогон.
 DEFAULT_DETECT_MODEL_PATH = os.path.join(
-    RUNS_DETECT_DIR, DEFAULT_DETECT_RUN_NAME, "weights", "best.pt"
+    RUNS_DETECT_DIR, "weights", "best.pt"
 )
 DETECTION_CLASS_NAMES = frozenset({"train", "number"})
 SEGMENTATION_CLASS_NAMES = frozenset(
@@ -94,7 +93,7 @@ def resolve_detection_model_path() -> str:
     - иначе последний по времени best.pt под runs/detect, у которого в args.yaml
       начальный model — medium (yolo11m.pt, yolov8m.pt, …);
     - если таких нет — последний best.pt вообще;
-    - иначе DEFAULT_DETECT_MODEL_PATH (yolo11l_1280_anti_overfit).
+    - иначе DEFAULT_DETECT_MODEL_PATH.
     """
     override = os.environ.get("AI_TRAIN_MODEL_PATH", "").strip()
     if override and os.path.isfile(override):

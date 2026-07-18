@@ -20,21 +20,21 @@
       <div class="work-mode-switch" role="radiogroup" aria-label="Раздел сайта">
         <button
           type="button"
-          id="work-mode-detection"
-          class="work-mode-option is-active"
-          role="radio"
-          aria-checked="true"
-        >
-          Разметка
-        </button>
-        <button
-          type="button"
           id="work-mode-segmentation"
           class="work-mode-option"
           role="radio"
           aria-checked="false"
         >
           Анализ
+        </button>
+        <button
+          type="button"
+          id="work-mode-detection"
+          class="work-mode-option is-active"
+          role="radio"
+          aria-checked="true"
+        >
+          Разметка
         </button>
       </div>
       <div class="app-header-progress" aria-label="Прогресс разметки">
@@ -396,6 +396,26 @@
               <option value="2">2 с</option>
               <option value="5">5 с</option>
             </select>
+            <span
+              class="video-auto-quality"
+              title="В каждом интервале анализируются соседние кадры"
+            >Авто: самый чёткий</span>
+            <label class="video-toolbar-label" for="video-blur-every">
+              Смазанный каждый
+            </label>
+            <input
+              id="video-blur-every"
+              class="video-blur-every-input"
+              type="number"
+              min="0"
+              max="1000"
+              step="1"
+              value="0"
+              inputmode="numeric"
+              title="0 — никогда; от 2 — выбирать самый смазанный каждый N-й кадр"
+              aria-label="Выбирать смазанный каждый N-й кадр"
+            />
+            <span class="video-toolbar-hint">кадр · 0 = никогда</span>
             <button type="button" id="video-extract-btn" class="viewer-action-btn viewer-action-btn--secondary">
               Извлечь кадры
             </button>
@@ -426,6 +446,15 @@
               title="Отметить кадр проверенным"
             >
               Проверено
+            </button>
+            <button
+              type="button"
+              id="unmark-reviewed-btn"
+              class="viewer-action-btn viewer-action-btn--secondary"
+              disabled
+              title="Снять отметку «Проверено» и перейти дальше (Shift+R)"
+            >
+              Снять проверку
             </button>
           </div>
         </div>
@@ -619,16 +648,19 @@
     <h3 id="hotkeys-help-title" class="hotkeys-help-title">Горячие кнопки</h3>
     <dl class="hotkeys-help-list">
       <div><dt>← / →</dt><dd>предыдущий / следующий кадр</dd></div>
+      <div><dt>Space + перетаскивание</dt><dd>перемещать увеличенное изображение</dd></div>
       <div><dt>R</dt><dd>отметить кадр проверенным</dd></div>
+      <div><dt>Shift+R</dt><dd>снять проверку и перейти к другому кадру</dd></div>
       <div><dt>S</dt><dd>пропустить кадр</dd></div>
       <div><dt>E</dt><dd>переключить режим просмотра / редактирования</dd></div>
       <div><dt>A</dt><dd>добавить фигуру типа выбранной; без выбора — bbox</dd></div>
+      <div><dt>W</dt><dd>включить инструмент «Добавить полигон»</dd></div>
       <div><dt>M</dt><dd>назначить категорию кадру</dd></div>
-      <div><dt>Backspace</dt><dd>удалить выбранный bbox / полигон</dd></div>
+      <div><dt>Backspace / Delete</dt><dd>удалить выбранный bbox / полигон</dd></div>
       <div>
         <dt>Alt/Ctrl + клик</dt>
         <dd>
-          по вершине полигона — удалить точку; по ребру полигона — вставить новую точку
+          по вершине — удалить точку; по ребру — вставить новую, в том числе во время рисования
         </dd>
       </div>
       <div>
@@ -641,11 +673,11 @@
       </div>
       <div>
         <dt>1–5 (Seg)</dt>
-        <dd>класс выбранной или следующей маски — body / autocoupler / axlebox / bogie / hose</dd>
+        <dd>класс рисуемой, выбранной или следующей маски — body / autocoupler / axlebox / bogie / hose</dd>
       </div>
       <div><dt>Esc</dt><dd>отменить текущий инструмент</dd></div>
       <div><dt>Ctrl+V</dt><dd>вставить изображение из буфера</dd></div>
-      <div><dt>Ctrl+Z / Ctrl+Y</dt><dd>отменить / повторить действие</dd></div>
+      <div><dt>Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z</dt><dd>отменить / повторить действие</dd></div>
     </dl>
     <div class="hotkeys-help-actions">
       <button type="button" class="primary" id="hotkeys-help-close">Закрыть</button>

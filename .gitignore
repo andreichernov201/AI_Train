@@ -45,5 +45,15 @@ runs/
 railgallery_photos/
 yolo-seg/
 *.pt
+*.pth
+*.ckpt
+*.onnx
+*.engine
+*.torchscript
+*.tflite
+*.pb
+**/weights/
+wandb/
+mlruns/
 *.zip
 *.rar
