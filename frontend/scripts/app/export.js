@@ -178,9 +178,87 @@ export function isImageEligibleForEmptyYoloLabelExport(
 }
 
 function yoloTaskForAction(actionKind) {
-  if (actionKind === "batch-yolo-detect-zip") return "detect";
-  if (actionKind === "batch-yolo-seg-zip") return "seg";
+  if (
+    actionKind === "batch-yolo-detect-zip" ||
+    actionKind === "current-yolo-detect"
+  ) {
+    return "detect";
+  }
+  if (
+    actionKind === "batch-yolo-seg-zip" ||
+    actionKind === "current-yolo-seg"
+  ) {
+    return "seg";
+  }
   return null;
+}
+
+/** @returns {{detect:{total:number,classes:Record<string,number>},segmentation:{total:number,classes:Record<string,number>}}} */
+function createEmptyExportObjectCounts() {
+  return {
+    detect: {
+      total: 0,
+      classes: Object.fromEntries(
+        yoloClassOrderForTask("detect").map((name) => [name, 0])
+      ),
+    },
+    segmentation: {
+      total: 0,
+      classes: Object.fromEntries(
+        yoloClassOrderForTask("segment").map((name) => [name, 0])
+      ),
+    },
+  };
+}
+
+/**
+ * Считает только те объекты, которые относятся к выбранному виду экспорта.
+ * @param {any[]} images
+ * @param {string} [actionKind]
+ * @param {ExportReviewFilter|null} [exportFilter]
+ * @param {Set<string>|null} [includedCropClasses]
+ */
+export function computeExportObjectCounts(
+  images,
+  actionKind = "",
+  exportFilter = null,
+  includedCropClasses = null
+) {
+  const counts = createEmptyExportObjectCounts();
+  const task = yoloTaskForAction(actionKind);
+  const cropExport = actionKind === "batch-crops-zip";
+
+  for (const im of images) {
+    if (
+      exportFilter &&
+      !matchesBatchExportReviewFilter(im, exportFilter, actionKind)
+    ) {
+      continue;
+    }
+    const annotations = Array.isArray(im?.detections) ? im.detections : [];
+    for (const annotation of annotations) {
+      const type = annotationTypeOf(annotation);
+      if (task && type !== task) continue;
+      if (cropExport && !isDetectionValidForCropExport(annotation)) continue;
+
+      const className =
+        String(annotation?.cls_name || "unknown").trim().toLowerCase() ||
+        "unknown";
+      if (
+        cropExport &&
+        includedCropClasses !== null &&
+        !includedCropClasses.has(exportCropClassDirName(className))
+      ) {
+        continue;
+      }
+
+      const group =
+        type === "seg" ? counts.segmentation : counts.detect;
+      group.classes[className] = (group.classes[className] || 0) + 1;
+      group.total++;
+    }
+  }
+  return counts;
 }
 
 /** @param {any} im @param {string} [actionKind] */
@@ -311,6 +389,11 @@ export function computeBatchExportEligibilitySummary(
     exportableEmptyLabels,
     skipped: total - exportable,
     reasons,
+    modelObjectCounts: computeExportObjectCounts(
+      images,
+      actionKind,
+      exportFilter
+    ),
   };
 }
 
@@ -440,6 +523,12 @@ export function computeBatchCropExportSummary(
     classCounts,
     reasons,
     isCropSummary: true,
+    modelObjectCounts: computeExportObjectCounts(
+      images,
+      "batch-crops-zip",
+      exportFilter,
+      includedClassDirs
+    ),
   };
 }
 

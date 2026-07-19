@@ -40,6 +40,7 @@ import {
 import {
   computeBatchExportEligibilitySummary,
   computeBatchCropExportSummary,
+  computeExportObjectCounts,
   exportCategoryDirectoriesForAction,
   exportCropClassDirectoriesForAction,
   createZipExportHandlers,
@@ -1663,6 +1664,11 @@ export function startApp(refs) {
         exportSummaryBody.appendChild(note);
       }
 
+      appendExportObjectCounts(
+        exportSummaryBody,
+        batchSummary.modelObjectCounts
+      );
+
       appendExportSkipReasonsDetails(exportSummaryBody, batchSummary);
       return;
     }
@@ -1685,6 +1691,11 @@ export function startApp(refs) {
     }
     exportSummaryBody.appendChild(card);
 
+    appendExportObjectCounts(
+      exportSummaryBody,
+      batchSummary.modelObjectCounts
+    );
+
     const stats = document.createElement("div");
     stats.className = "export-stats-row export-stats-row--secondary";
     stats.appendChild(
@@ -1704,6 +1715,56 @@ export function startApp(refs) {
     exportSummaryBody.appendChild(stats);
 
     appendExportSkipReasonsDetails(exportSummaryBody, batchSummary);
+  }
+
+  /** @param {HTMLElement} container @param {any} modelObjectCounts */
+  function appendExportObjectCounts(container, modelObjectCounts) {
+    if (!modelObjectCounts) return;
+    const section = document.createElement("section");
+    section.className = "export-object-counts";
+
+    const title = document.createElement("div");
+    title.className = "export-object-counts-title";
+    title.textContent = "Объекты в выбранном экспорте";
+    section.appendChild(title);
+
+    const grid = document.createElement("div");
+    grid.className = "export-object-counts-grid";
+    for (const [key, label] of [
+      ["detect", "Detect"],
+      ["segmentation", "Segmentation"],
+    ]) {
+      const data = modelObjectCounts[key] || { total: 0, classes: {} };
+      const card = document.createElement("div");
+      card.className = `export-object-count-card export-object-count-card--${key}`;
+
+      const heading = document.createElement("div");
+      heading.className = "export-object-count-heading";
+      const name = document.createElement("span");
+      name.textContent = label;
+      const total = document.createElement("span");
+      total.className = "export-object-count-total";
+      total.textContent = `Всего: ${Number(data.total) || 0}`;
+      heading.append(name, total);
+      card.appendChild(heading);
+
+      const list = document.createElement("div");
+      list.className = "export-object-count-list";
+      for (const [className, count] of Object.entries(data.classes || {})) {
+        const row = document.createElement("div");
+        row.className = "export-object-count-row";
+        const classLabel = document.createElement("span");
+        classLabel.textContent = className;
+        const value = document.createElement("strong");
+        value.textContent = String(count);
+        row.append(classLabel, value);
+        list.appendChild(row);
+      }
+      card.appendChild(list);
+      grid.appendChild(card);
+    }
+    section.appendChild(grid);
+    container.appendChild(section);
   }
 
   /** @type {((ev: KeyboardEvent) => void)|null} */
@@ -2657,10 +2718,17 @@ export function startApp(refs) {
       showToast(cur.detail, { type: "warning", durationMs: 3800 });
       return;
     }
+    const currentSummary = {
+      ...summary,
+      modelObjectCounts: computeExportObjectCounts(
+        [batchState.images[batchState.currentIndex]],
+        actionKind
+      ),
+    };
     openExportSummaryModal({
       title: "Экспорт",
       subtitle,
-      summary,
+      summary: currentSummary,
       mode: "single",
       actionKind,
       singleExports: 1,

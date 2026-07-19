@@ -1573,6 +1573,81 @@ button:hover {
   color: var(--text-main);
 }
 
+.export-object-counts {
+  margin-top: 12px;
+}
+
+.export-object-counts-title {
+  margin-bottom: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.export-object-counts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.export-object-count-card {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.export-object-count-card--detect {
+  border-color: rgba(59, 130, 246, 0.32);
+}
+
+.export-object-count-card--segmentation {
+  border-color: rgba(168, 85, 247, 0.32);
+}
+
+.export-object-count-heading,
+.export-object-count-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.export-object-count-heading {
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: 700;
+}
+
+.export-object-count-total {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.export-object-count-list {
+  padding-top: 5px;
+}
+
+.export-object-count-row {
+  padding: 2px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.export-object-count-row strong {
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 520px) {
+  .export-object-counts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .export-current-frame-card {
   padding: 12px 14px;
   border-radius: var(--radius-md);
