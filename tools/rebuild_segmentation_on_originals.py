@@ -127,6 +127,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Originals directory; repeat the option to search several directories.",
     )
     parser.add_argument(
+        "--flat-originals",
+        type=Path,
+        action="append",
+        default=None,
+        help="Originals directory searched only at its top level; repeat as needed.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=Path("dataset/segmentation_originals"),
@@ -141,8 +148,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--refine-candidates",
         type=int,
-        default=12,
-        help="Number of globally shortlisted originals to verify (default: 12).",
+        default=64,
+        help="Number of globally shortlisted originals to verify (default: 64).",
     )
     parser.add_argument(
         "--min-inliers",
@@ -221,11 +228,19 @@ def extract_features(
 
 
 def load_original_catalog(
-    directories: list[Path], feature_size: int
+    directories: list[Path], flat_directories: list[Path], feature_size: int
 ) -> OriginalCatalog:
     paths: list[Path] = []
     for directory in directories:
         paths.extend(image_files(directory))
+    for directory in flat_directories:
+        paths.extend(
+            sorted(
+                path
+                for path in directory.iterdir()
+                if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES
+            )
+        )
     if not paths:
         raise RebuildError("No original images found")
 
@@ -801,9 +816,13 @@ def rebuild(args: argparse.Namespace) -> dict[str, object]:
         Path(r"C:\Users\ROG\Desktop\railgallery_photos_segmentation"),
         Path(r"C:\Users\ROG\Desktop\Новая папка (2)"),
     ]
+    flat_original_args = args.flat_originals or [
+        Path(r"C:\Users\ROG\Desktop\Новая папка (3)"),
+    ]
     originals = [path.resolve() for path in original_args]
+    flat_originals = [path.resolve() for path in flat_original_args]
     output = args.output.resolve()
-    if output in {yolo_seg, references} or output in originals:
+    if output in {yolo_seg, references} or output in originals or output in flat_originals:
         raise RebuildError("Output must differ from every input directory")
 
     samples, excluded_aug0 = collect_sources(yolo_seg, references, args.feature_size)
@@ -814,7 +833,7 @@ def rebuild(args: argparse.Namespace) -> dict[str, object]:
         file=sys.stderr,
         flush=True,
     )
-    catalog = load_original_catalog(originals, args.feature_size)
+    catalog = load_original_catalog(originals, flat_originals, args.feature_size)
 
     outputs: dict[Path, OutputItem] = {}
     known_originals: set[Path] = set()
