@@ -22,6 +22,8 @@ function getColorByClass(clsId) {
 }
 
 const UNCATEGORIZED_EXPORT_DIR = "uncategorized";
+const FLAT_EXPORT_PLAN_KEY = "__all__";
+const DEFAULT_VALIDATION_PERCENT = 20;
 
 /** @param {number} value @param {number} min @param {number} max */
 function clamp(value, min, max) {
@@ -110,6 +112,145 @@ function buildPerCategoryNumberingPlan(items, startNumbersByCategory = {}) {
     pads.set(key, exportNumberPadWidth(start, count));
   }
   return { counts, pads, starts };
+}
+/** @param {unknown} value */
+export function normalizeValidationPercent(value) {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return DEFAULT_VALIDATION_PERCENT;
+  return Math.max(1, Math.min(50, n));
+}
+
+/** @param {string} id */
+function exportOptionElement(id) {
+  if (typeof document === "undefined") return null;
+  return document.getElementById(id);
+}
+
+/** @param {Record<string, any>} opts */
+function useFlatExportLayout(opts) {
+  if (typeof opts.flatLayout === "boolean") return opts.flatLayout;
+  const checkbox = exportOptionElement("export-flat-layout");
+  return checkbox?.checked === true;
+}
+
+/** @param {Record<string, any>} opts @param {number} count */
+function flatExportStartNumber(opts, count) {
+  const input = exportOptionElement("export-flat-start-number");
+  const raw = input && "value" in input ? input.value : opts.startNumber;
+  return normalizeExportStartNumber(raw ?? 1, count);
+}
+
+/** @param {Record<string, any>} opts */
+function exportValidationPercent(opts) {
+  if (opts.validationPercent !== undefined) {
+    return normalizeValidationPercent(opts.validationPercent);
+  }
+  const input = exportOptionElement("export-validation-percent");
+  return normalizeValidationPercent(
+    input && "value" in input ? input.value : DEFAULT_VALIDATION_PERCENT
+  );
+}
+
+/**
+ * Единая нумерация для плоского архива или прежняя нумерация по категориям.
+ * @param {any[]} items
+ * @param {Record<string, any>} opts
+ */
+function buildArchiveNumbering(items, opts = {}) {
+  const flatLayout = useFlatExportLayout(opts);
+  const planItems = flatLayout
+    ? items.map(() => ({ category: FLAT_EXPORT_PLAN_KEY }))
+    : items;
+  const starts = flatLayout
+    ? { [FLAT_EXPORT_PLAN_KEY]: flatExportStartNumber(opts, items.length) }
+    : opts.startNumbersByCategory;
+  const plan = buildPerCategoryNumberingPlan(planItems, starts);
+  /** @type {Map<string, number>} */
+  const ordinals = new Map();
+
+  return {
+    flatLayout,
+    /** @param {any} im */
+    next(im) {
+      const planKey = flatLayout
+        ? FLAT_EXPORT_PLAN_KEY
+        : exportCategoryPlanKey(im?.category);
+      const categoryDir = flatLayout ? "" : exportCategoryDirName(im?.category);
+      const ordinal = (ordinals.get(planKey) || 0) + 1;
+      ordinals.set(planKey, ordinal);
+      return {
+        categoryDir,
+        ordinal,
+        stem: exportNumberedFileStem(
+          ordinal,
+          plan.starts.get(planKey),
+          plan.pads.get(planKey)
+        ),
+      };
+    },
+  };
+}
+
+/** @param {any} parent @param {string} categoryDir */
+function exportFolderForOptionalCategory(parent, categoryDir) {
+  return categoryDir ? exportFolderForCategory(parent, categoryDir) : parent;
+}
+
+/** @param {any} im @param {number} index */
+function stableExportRank(im, index) {
+  const text = [im?.id, im?.originalName, im?.displayName, index].join("|");
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+/**
+ * Детерминированно и по возможности пропорционально категориям делит батч на train/val.
+ * Одинаковый батч с теми же именами файлов всегда получает одинаковое разбиение.
+ * @param {any[]} items
+ * @param {unknown} validationPercent
+ */
+export function buildTrainValidationSplit(items, validationPercent = DEFAULT_VALIDATION_PERCENT) {
+  const percent = normalizeValidationPercent(validationPercent);
+  /** @type {Map<string, Array<{ im: any, index: number, rank: number }>>} */
+  const groups = new Map();
+  items.forEach((im, index) => {
+    const key = exportCategoryPlanKey(im?.category);
+    const rows = groups.get(key) || [];
+    rows.push({ im, index, rank: stableExportRank(im, index) });
+    groups.set(key, rows);
+  });
+
+  /** @type {Map<any, "train"|"val">} */
+  const assignments = new Map(items.map((im) => [im, "train"]));
+  for (const rows of groups.values()) {
+    if (rows.length < 2) continue;
+    rows.sort((a, b) => a.rank - b.rank || a.index - b.index);
+    const valCount = Math.max(
+      1,
+      Math.min(rows.length - 1, Math.round((rows.length * percent) / 100))
+    );
+    for (let i = 0; i < valCount; i++) assignments.set(rows[i].im, "val");
+  }
+
+  let valCount = items.filter((im) => assignments.get(im) === "val").length;
+  if (items.length > 1 && valCount === 0) {
+    const fallback = items
+      .map((im, index) => ({ im, index, rank: stableExportRank(im, index) }))
+      .sort((a, b) => a.rank - b.rank || a.index - b.index)[0];
+    assignments.set(fallback.im, "val");
+    valCount = 1;
+  }
+
+  return {
+    assignments,
+    trainCount: items.length - valCount,
+    valCount,
+    validationPercent: percent,
+  };
 }
 
 /** @param {any} im */
@@ -688,12 +829,17 @@ export function buildYoloTxtFileBody(im, iw, ih, task = "detect") {
   return `${lines.join("\n")}\n`;
 }
 
-/** @param {"detect"|"segment"} [task] @param {{includeDatasetPaths?:boolean}} [opts] */
+/** @param {"detect"|"segment"} [task] @param {{includeDatasetPaths?:boolean, trainPath?:string, valPath?:string}} [opts] */
 export function buildProjectExportDataYaml(task = "detect", opts = {}) {
   const order = yoloClassOrderForTask(task);
   const lines = [];
   if (opts.includeDatasetPaths) {
-    lines.push("path: .", "train: images", "val: images");
+    // Без `path: .`: Ultralytics иначе привязывает точку к папке запуска,
+    // а не к расположению YAML. Отсутствующий path делает архив переносимым.
+    lines.push(
+      `train: ${opts.trainPath || "images/train"}`,
+      `val: ${opts.valPath || "images/val"}`
+    );
   }
   lines.push(`task: ${task}`, "names:");
   for (let i = 0; i < order.length; i++) {
@@ -933,21 +1079,12 @@ export function createZipExportHandlers(deps) {
       const folder = zip.folder("images");
       if (!folder) throw new Error("Не удалось создать папку images в архиве.");
 
-      const plan = buildPerCategoryNumberingPlan(items, opts.startNumbersByCategory);
-      /** @type {Map<string, number>} */
-      const categoryOrdinals = new Map();
+      const numbering = buildArchiveNumbering(items, opts);
 
       for (const im of items) {
-        const planKey = exportCategoryPlanKey(im.category);
-        const catDirName = exportCategoryDirName(im.category);
-        const next = (categoryOrdinals.get(planKey) || 0) + 1;
-        categoryOrdinals.set(planKey, next);
-        const name = pngZipEntryBaseName(
-          next,
-          plan.starts.get(planKey),
-          plan.pads.get(planKey)
-        );
-        const targetFolder = exportFolderForCategory(folder, catDirName);
+        const { categoryDir, stem } = numbering.next(im);
+        const name = `${stem}.png`;
+        const targetFolder = exportFolderForOptionalCategory(folder, categoryDir);
         const pngBlob = withMarkup
           ? await renderAnnotatedPngBlobFromItem(im)
           : await convertImageBlobToPng(im.blob);
@@ -1023,22 +1160,39 @@ export function createZipExportHandlers(deps) {
         throw new Error("Не удалось создать папки images/labels в архиве.");
       }
 
-      const plan = buildPerCategoryNumberingPlan(items, opts.startNumbersByCategory);
-      /** @type {Map<string, number>} */
-      const categoryOrdinals = new Map();
+      const numbering = buildArchiveNumbering(items, opts);
+      const splitPlan = buildTrainValidationSplit(
+        items,
+        exportValidationPercent(opts)
+      );
+      const imageSplitFolders = {
+        train: folderImages.folder("train"),
+        val: folderImages.folder("val"),
+      };
+      const labelSplitFolders = {
+        train: folderLabels.folder("train"),
+        val: folderLabels.folder("val"),
+      };
+      if (
+        !imageSplitFolders.train ||
+        !imageSplitFolders.val ||
+        !labelSplitFolders.train ||
+        !labelSplitFolders.val
+      ) {
+        throw new Error("Не удалось создать train/val в архиве.");
+      }
 
       for (const im of items) {
-        const planKey = exportCategoryPlanKey(im.category);
-        const catDirName = exportCategoryDirName(im.category);
-        const next = (categoryOrdinals.get(planKey) || 0) + 1;
-        categoryOrdinals.set(planKey, next);
-        const stem = exportNumberedFileStem(
-          next,
-          plan.starts.get(planKey),
-          plan.pads.get(planKey)
+        const { categoryDir, stem } = numbering.next(im);
+        const split = splitPlan.assignments.get(im) || "train";
+        const targetLabelFolder = exportFolderForOptionalCategory(
+          labelSplitFolders[split],
+          categoryDir
         );
-        const targetLabelFolder = exportFolderForCategory(folderLabels, catDirName);
-        const targetImageFolder = exportFolderForCategory(folderImages, catDirName);
+        const targetImageFolder = exportFolderForOptionalCategory(
+          imageSplitFolders[split],
+          categoryDir
+        );
         const size = await labelNormalizationSize(im);
         const body =
           size && size.width > 0 && size.height > 0
@@ -1049,13 +1203,20 @@ export function createZipExportHandlers(deps) {
         await yieldToMain();
       }
 
-      zip.file("data.yaml", buildProjectExportDataYaml(task, { includeDatasetPaths: true }));
+      zip.file(
+        "data.yaml",
+        buildProjectExportDataYaml(task, {
+          includeDatasetPaths: true,
+          trainPath: "images/train",
+          valPath: splitPlan.valCount > 0 ? "images/val" : "images/train",
+        })
+      );
       zip.file("classes.txt", buildProjectExportClassesTxt(task));
       const zipBlob = await zip.generateAsync({ type: "blob" });
       const stamp = new Date().toISOString().replace(/[:.]/g, "-");
       triggerBlobDownload(zipBlob, `yolo_${task}_${stamp}.zip`);
       showToast(
-        `Экспорт завершён: YOLO ${task === "segment" ? "Seg" : "Detect"}, ${items.length} пар images/labels.`,
+        `Экспорт завершён: YOLO ${task === "segment" ? "Seg" : "Detect"}, train: ${splitPlan.trainCount}, val: ${splitPlan.valCount}.`,
         { type: "success" }
       );
     } catch (err) {
@@ -1107,22 +1268,12 @@ export function createZipExportHandlers(deps) {
       const folder = zip.folder("annotations");
       if (!folder) throw new Error("Не удалось создать папку annotations в архиве.");
 
-      const plan = buildPerCategoryNumberingPlan(items, opts.startNumbersByCategory);
-      /** @type {Map<string, number>} */
-      const categoryOrdinals = new Map();
+      const numbering = buildArchiveNumbering(items, opts);
       let written = 0;
 
       for (const im of items) {
-        const planKey = exportCategoryPlanKey(im.category);
-        const catDirName = exportCategoryDirName(im.category);
-        const next = (categoryOrdinals.get(planKey) || 0) + 1;
-        categoryOrdinals.set(planKey, next);
-        const stem = exportNumberedFileStem(
-          next,
-          plan.starts.get(planKey),
-          plan.pads.get(planKey)
-        );
-        const targetFolder = exportFolderForCategory(folder, catDirName);
+        const { categoryDir, stem } = numbering.next(im);
+        const targetFolder = exportFolderForOptionalCategory(folder, categoryDir);
         const size = await ensurePositiveExportDimensions(im);
         const annotObj = buildAnnotationExportJsonObject(im, size, stem);
         targetFolder.file(`${stem}.json`, `${JSON.stringify(annotObj, null, 2)}\n`);
@@ -1205,26 +1356,22 @@ export function createZipExportHandlers(deps) {
       /** @type {Array<Record<string, unknown>>} */
       const imagesMeta = [];
 
-      const plan = buildPerCategoryNumberingPlan(items, opts.startNumbersByCategory);
-      /** @type {Map<string, number>} */
-      const categoryOrdinals = new Map();
+      const numbering = buildArchiveNumbering(items, opts);
 
       for (const im of items) {
-        const planKey = exportCategoryPlanKey(im.category);
-        const catDirName = exportCategoryDirName(im.category);
-        const next = (categoryOrdinals.get(planKey) || 0) + 1;
-        categoryOrdinals.set(planKey, next);
-        const stem = exportNumberedFileStem(
-          next,
-          plan.starts.get(planKey),
-          plan.pads.get(planKey)
+        const { categoryDir, stem } = numbering.next(im);
+        const imageCatFolder = exportFolderForOptionalCategory(
+          folderImages,
+          categoryDir
         );
-        const imageCatFolder = exportFolderForCategory(folderImages, catDirName);
-        const detectLabelCatFolder = exportFolderForCategory(
+        const detectLabelCatFolder = exportFolderForOptionalCategory(
           folderLabelsDetect,
-          catDirName
+          categoryDir
         );
-        const segLabelCatFolder = exportFolderForCategory(folderLabelsSeg, catDirName);
+        const segLabelCatFolder = exportFolderForOptionalCategory(
+          folderLabelsSeg,
+          categoryDir
+        );
 
         const size = await ensurePositiveExportDimensions(im);
 
@@ -1257,7 +1404,10 @@ export function createZipExportHandlers(deps) {
         }
 
         if (includeAnnotations && folderAnnot) {
-          const annotCatFolder = exportFolderForCategory(folderAnnot, catDirName);
+          const annotCatFolder = exportFolderForOptionalCategory(
+            folderAnnot,
+            categoryDir
+          );
           const annotObj = buildAnnotationExportJsonObject(im, size, stem);
           annotCatFolder.file(`${stem}.json`, `${JSON.stringify(annotObj, null, 2)}\n`);
         }
@@ -1265,7 +1415,7 @@ export function createZipExportHandlers(deps) {
         imagesMeta.push({
           exportStem: stem,
           exportedImageFileName: `${stem}.png`,
-          exportCategoryDir: catDirName,
+          exportCategoryDir: categoryDir,
           id: im.id,
           displayName: im.displayName,
           originalName: im.originalName,
@@ -1273,7 +1423,7 @@ export function createZipExportHandlers(deps) {
           imageNames: {
             beforeUpload: im.originalName,
             afterUploadOnSite: im.displayName,
-            afterExport: `${catDirName}/${stem}.png`,
+            afterExport: categoryDir ? `${categoryDir}/${stem}.png` : `${stem}.png`,
           },
           status: im.status,
           reviewed: im.reviewed,
@@ -1317,6 +1467,7 @@ export function createZipExportHandlers(deps) {
         exportedAt,
         currentIndex: exportedCurrentIndex,
         includesAnnotationsFolder: includeAnnotations,
+        flatLayout: numbering.flatLayout,
         yoloTasks: ["detect", "segment"],
         classes: {
           detect: yoloClassOrderForTask("detect").map((name, id) => ({ id, name })),
@@ -1497,25 +1648,15 @@ export function createZipExportHandlers(deps) {
       const folder = zip.folder("crops");
       if (!folder) throw new Error("Не удалось создать папку crops в архиве.");
 
-      const plan = buildPerCategoryNumberingPlan(
-        cropJobs.map((job) => ({
-          category: exportCropClassDirName(job.detection.cls_name),
-        })),
-        opts.startNumbersByCategory
-      );
-      /** @type {Map<string, number>} */
-      const classOrdinals = new Map();
+      const numberedCropJobs = cropJobs.map((job) => ({
+        ...job,
+        category: exportCropClassDirName(job.detection.cls_name),
+      }));
+      const numbering = buildArchiveNumbering(numberedCropJobs, opts);
 
-      for (const { im, detection } of cropJobs) {
-        const planKey = exportCropClassDirName(detection.cls_name);
-        const classDirName = planKey;
-        const next = (classOrdinals.get(planKey) || 0) + 1;
-        classOrdinals.set(planKey, next);
-        const name = pngZipEntryBaseName(
-          next,
-          plan.starts.get(planKey),
-          plan.pads.get(planKey)
-        );
+      for (const { im, detection, category } of numberedCropJobs) {
+        const { categoryDir, stem } = numbering.next({ category });
+        const name = `${stem}.png`;
 
         let bitmap = bitmapCache.get(im.id);
         if (!bitmap) {
@@ -1523,7 +1664,7 @@ export function createZipExportHandlers(deps) {
           bitmapCache.set(im.id, bitmap);
         }
 
-        const targetFolder = exportFolderForCategory(folder, classDirName);
+        const targetFolder = exportFolderForOptionalCategory(folder, categoryDir);
         const pngBlob = await renderCropPngBlobFromDetection(bitmap, im, detection);
         targetFolder.file(name, pngBlob);
         await yieldToMain();
@@ -1533,7 +1674,9 @@ export function createZipExportHandlers(deps) {
       const stamp = new Date().toISOString().replace(/[:.]/g, "-");
       triggerBlobDownload(zipBlob, `crops_bbox_${stamp}.zip`);
       showToast(
-        `Экспорт завершён: ${cropJobs.length} кропов в crops/<класс>/.`,
+        numbering.flatLayout
+          ? `Экспорт завершён: ${cropJobs.length} кропов в общей папке crops/.`
+          : `Экспорт завершён: ${cropJobs.length} кропов в crops/<класс>/.`,
         { type: "success", durationMs: 4200 }
       );
     } catch (err) {

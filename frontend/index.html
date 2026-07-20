@@ -580,12 +580,45 @@
         <input type="checkbox" id="export-review-include-unreviewed" checked />
         <span>Включить непроверенные кадры</span>
       </label>
+      <div class="export-layout-options">
+        <div class="export-review-filter-title">Структура архива</div>
+        <label class="export-review-option">
+          <input type="checkbox" id="export-flat-layout" />
+          <span>Не разбивать файлы на папки категорий</span>
+        </label>
+        <label class="export-flat-start-row" for="export-flat-start-number">
+          <span>Начальный номер общей нумерации</span>
+          <input
+            type="number"
+            id="export-flat-start-number"
+            min="1"
+            step="1"
+            value="1"
+            inputmode="numeric"
+          />
+        </label>
+      </div>
       <div id="export-review-filter-hint" class="export-review-filter-hint" aria-live="polite"></div>
     </div>
     <div id="export-yolo-options" class="export-yolo-options" hidden>
       <label class="export-review-option">
         <input type="checkbox" id="export-yolo-empty-labels" />
         <span>Включить кадры без разметки (negative samples)</span>
+      </label>
+      <label class="export-validation-row" for="export-validation-percent">
+        <span>Доля validation</span>
+        <span class="export-validation-input-wrap">
+          <input
+            type="number"
+            id="export-validation-percent"
+            min="1"
+            max="50"
+            step="1"
+            value="20"
+            inputmode="numeric"
+          />
+          <span>%</span>
+        </span>
       </label>
       <div id="export-yolo-options-hint" class="export-review-filter-hint" aria-live="polite">
         У каждого кадра будет файл разметки — пустой, если объектов нет.

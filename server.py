@@ -1,6 +1,5 @@
 import io
 import os
-import re
 from typing import Any
 
 from fastapi import FastAPI, File, UploadFile
@@ -13,191 +12,96 @@ from ultralytics import YOLO
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.join(ROOT_DIR, "frontend")
 RUNS_DETECT_DIR = os.path.join(ROOT_DIR, "runs", "detect")
-RUNS_SEGMENT_DIR = os.path.join(ROOT_DIR, "runs", "segmentation")
+RUNS_SEGMENT_DIR = os.path.join(ROOT_DIR, "runs", "segment")
+LEGACY_RUNS_SEGMENT_DIR = os.path.join(ROOT_DIR, "runs", "segmentation")
 YOLO_SEG_DIR = os.path.join(ROOT_DIR, "yolo-seg")
-# Базовый путь; при его отсутствии выбирается последний доступный прогон.
-DEFAULT_DETECT_MODEL_PATH = os.path.join(
-    RUNS_DETECT_DIR, "weights", "best.pt"
-)
+DEFAULT_DETECT_MODEL_PATH = os.path.join(RUNS_DETECT_DIR, "weights", "best.pt")
+DEFAULT_SEGMENT_MODEL_PATH = os.path.join(RUNS_SEGMENT_DIR, "weights", "best.pt")
 DETECTION_CLASS_NAMES = frozenset({"train", "number"})
 SEGMENTATION_CLASS_NAMES = frozenset(
     {"body", "autocoupler", "axlebox", "bogie", "hose"}
 )
-DEFAULT_SEGMENT_MODEL_PATH = os.path.join(RUNS_SEGMENT_DIR, "weights", "best.pt")
-
-# Имена средних (m) предобученных весов Ultralytics, с которых обычно стартует train.
-_MEDIUM_BACKBONE_RE = re.compile(
-    r"^yolo(?:v(?P<v>\d+))?(?P<rest>\d*)m\.pt$", re.IGNORECASE
-)
 
 
-def _parse_model_field_from_args(text: str) -> str | None:
-    for line in text.replace("\r\n", "\n").split("\n"):
-        line = line.strip()
-        if line.lower().startswith("model:"):
-            return line.split(":", 1)[1].strip().strip("'\"")
-    return None
-
-
-def _basename_lower(p: str) -> str:
-    return os.path.basename(str(p).replace("\\", "/")).lower()
-
-
-def _is_medium_backbone_file(name: str) -> bool:
-    base = _basename_lower(name)
-    if not base.endswith(".pt"):
-        return False
-    return bool(_MEDIUM_BACKBONE_RE.match(base))
-
-
-def _resolve_initial_backbone_from_args_yaml(
-    args_path: str, visited: set[str] | None = None, depth: int = 0
-) -> str | None:
-    """Ищет в args.yaml поле model; если там чужой чекпоинт — пробуем его args (resume)."""
-    if visited is None:
-        visited = set()
-    if depth > 8 or args_path in visited or not os.path.isfile(args_path):
+def _latest_best_pt(search_roots: tuple[str, ...]) -> str | None:
+    """Возвращает самый свежий best.pt независимо от имени папки запуска."""
+    candidates: list[tuple[int, str]] = []
+    for search_root in search_roots:
+        if not os.path.isdir(search_root):
+            continue
+        for root, _dirs, files in os.walk(search_root):
+            if os.path.basename(root).lower() != "weights" or "best.pt" not in files:
+                continue
+            best_pt = os.path.abspath(os.path.join(root, "best.pt"))
+            try:
+                candidates.append((os.stat(best_pt).st_mtime_ns, best_pt))
+            except OSError:
+                continue
+    if not candidates:
         return None
-    visited.add(args_path)
-    try:
-        with open(args_path, encoding="utf-8", errors="replace") as f:
-            text = f.read()
-    except OSError:
-        return None
-    raw = _parse_model_field_from_args(text)
-    if not raw:
-        return None
-    base = _basename_lower(raw)
-    if _is_medium_backbone_file(base):
-        return base
-    if base.endswith(".pt"):
-        cand = os.path.normpath(os.path.join(os.path.dirname(args_path), raw))
-        if not os.path.isfile(cand):
-            cand = os.path.normpath(os.path.join(ROOT_DIR, raw))
-        if os.path.isfile(cand):
-            parent_args = os.path.join(os.path.dirname(cand), "..", "args.yaml")
-            parent_args = os.path.normpath(parent_args)
-            return _resolve_initial_backbone_from_args_yaml(parent_args, visited, depth + 1)
-    return None
-
-
-def _train_run_dir_from_best_pt(path: str) -> str:
-    # .../run_name/weights/best.pt -> .../run_name
-    return os.path.dirname(os.path.dirname(path))
+    return max(candidates, key=lambda item: (item[0], item[1]))[1]
 
 
 def resolve_detection_model_path() -> str:
-    """
-    Путь к весам для /api/detect:
-    - переменная AI_TRAIN_MODEL_PATH, если файл существует;
-    - иначе последний по времени best.pt под runs/detect, у которого в args.yaml
-      начальный model — medium (yolo11m.pt, yolov8m.pt, …);
-    - если таких нет — последний best.pt вообще;
-    - иначе DEFAULT_DETECT_MODEL_PATH.
-    """
+    """Переменная окружения имеет приоритет, иначе берётся самый свежий best.pt."""
     override = os.environ.get("AI_TRAIN_MODEL_PATH", "").strip()
     if override and os.path.isfile(override):
         return os.path.abspath(override)
-
-    if os.path.isfile(DEFAULT_DETECT_MODEL_PATH):
-        return DEFAULT_DETECT_MODEL_PATH
-
-    if not os.path.isdir(RUNS_DETECT_DIR):
-        return DEFAULT_DETECT_MODEL_PATH
-
-    candidates: list[tuple[float, str, bool]] = []
-    for root, _dirs, files in os.walk(RUNS_DETECT_DIR):
-        if os.path.basename(root).lower() != "weights":
-            continue
-        if "best.pt" not in files:
-            continue
-        best_pt = os.path.join(root, "best.pt")
-        try:
-            mtime = os.path.getmtime(best_pt)
-        except OSError:
-            continue
-        run_dir = _train_run_dir_from_best_pt(best_pt)
-        args_yaml = os.path.join(run_dir, "args.yaml")
-        initial = _resolve_initial_backbone_from_args_yaml(args_yaml)
-        is_medium = bool(initial and _is_medium_backbone_file(initial))
-        candidates.append((mtime, best_pt, is_medium))
-
-    if not candidates:
-        return DEFAULT_DETECT_MODEL_PATH
-
-    medium = [(t, p) for t, p, m in candidates if m]
-    if medium:
-        _t, path = max(medium, key=lambda x: x[0])
-        return path
-    _t, path, _ = max(candidates, key=lambda x: x[0])
-    return path
+    return _latest_best_pt((RUNS_DETECT_DIR,)) or DEFAULT_DETECT_MODEL_PATH
 
 
-_model_cache: tuple[str, YOLO] | None = None
-_segmentation_model_cache: tuple[str, YOLO] | None = None
+def resolve_segmentation_model_path() -> str:
+    """Ищет свежий best.pt в новой структуре и в старых папках для совместимости."""
+    override = os.environ.get("AI_TRAIN_SEG_MODEL_PATH", "").strip()
+    if override and os.path.isfile(override):
+        return os.path.abspath(override)
+    return (
+        _latest_best_pt(
+            (
+                RUNS_SEGMENT_DIR,
+                LEGACY_RUNS_SEGMENT_DIR,
+                os.path.join(YOLO_SEG_DIR, "runs", "segment"),
+            )
+        )
+        or DEFAULT_SEGMENT_MODEL_PATH
+    )
+
+
+def _model_signature(path: str) -> tuple[str, int, int]:
+    stat = os.stat(path)
+    return os.path.abspath(path), stat.st_mtime_ns, stat.st_size
+
+
+_model_cache: tuple[str, int, int, YOLO] | None = None
+_segmentation_model_cache: tuple[str, int, int, YOLO] | None = None
 
 
 def get_model() -> YOLO:
     global _model_cache
     path = resolve_detection_model_path()
-    if _model_cache is None or _model_cache[0] != path:
-        if not os.path.exists(path):
-            raise FileNotFoundError(
-                f"Model not found: {path}. "
-                f"Expected default: {DEFAULT_DETECT_MODEL_PATH} "
-                f"or set AI_TRAIN_MODEL_PATH."
-            )
-        _model_cache = (path, YOLO(path))
-    return _model_cache[1]
-
-
-def resolve_segmentation_model_path() -> str:
-    """
-    Путь к весам для /api/segment:
-    - переменная AI_TRAIN_SEG_MODEL_PATH, если файл существует;
-    - иначе runs/segmentation/weights/best.pt;
-    - иначе последний best.pt под runs/segmentation или yolo-seg/runs/segment.
-    """
-    override = os.environ.get("AI_TRAIN_SEG_MODEL_PATH", "").strip()
-    if override and os.path.isfile(override):
-        return os.path.abspath(override)
-
-    if os.path.isfile(DEFAULT_SEGMENT_MODEL_PATH):
-        return DEFAULT_SEGMENT_MODEL_PATH
-
-    candidates: list[tuple[float, str]] = []
-    for search_root in (RUNS_SEGMENT_DIR, os.path.join(YOLO_SEG_DIR, "runs", "segment")):
-        if not os.path.isdir(search_root):
-            continue
-        for root, _dirs, files in os.walk(search_root):
-            if os.path.basename(root).lower() != "weights":
-                continue
-            if "best.pt" not in files:
-                continue
-            best_pt = os.path.join(root, "best.pt")
-            try:
-                candidates.append((os.path.getmtime(best_pt), best_pt))
-            except OSError:
-                continue
-    if candidates:
-        _t, path = max(candidates, key=lambda x: x[0])
-        return path
-    return DEFAULT_SEGMENT_MODEL_PATH
+    if not os.path.isfile(path):
+        raise FileNotFoundError(
+            f"Detection model not found: {path}. "
+            f"Train a model under {RUNS_DETECT_DIR} or set AI_TRAIN_MODEL_PATH."
+        )
+    signature = _model_signature(path)
+    if _model_cache is None or _model_cache[:3] != signature:
+        _model_cache = (*signature, YOLO(path))
+    return _model_cache[3]
 
 
 def get_segmentation_model() -> YOLO:
     global _segmentation_model_cache
     path = resolve_segmentation_model_path()
-    if _segmentation_model_cache is None or _segmentation_model_cache[0] != path:
-        if not os.path.exists(path):
-            raise FileNotFoundError(
-                f"Segmentation model not found: {path}. "
-                f"Expected default: {DEFAULT_SEGMENT_MODEL_PATH} "
-                f"or set AI_TRAIN_SEG_MODEL_PATH."
-            )
-        _segmentation_model_cache = (path, YOLO(path))
-    return _segmentation_model_cache[1]
-
+    if not os.path.isfile(path):
+        raise FileNotFoundError(
+            f"Segmentation model not found: {path}. "
+            f"Train a model under {RUNS_SEGMENT_DIR} or set AI_TRAIN_SEG_MODEL_PATH."
+        )
+    signature = _model_signature(path)
+    if _segmentation_model_cache is None or _segmentation_model_cache[:3] != signature:
+        _segmentation_model_cache = (*signature, YOLO(path))
+    return _segmentation_model_cache[3]
 
 def yolo_result_to_detections(
     res: Any,

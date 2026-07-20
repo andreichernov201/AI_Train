@@ -39,9 +39,21 @@ Desktop.ini
 # Frontend deps (если появятся)
 node_modules/
 
-# Локальный набор данных (не коммитить и не пушить на GitHub)
-dataset/
-runs/
+# Локальные данные: в Git остаются только инструкции внутри канонических папок
+dataset/*
+!dataset/detection/
+dataset/detection/*
+!dataset/detection/README.md
+!dataset/segmentation/
+dataset/segmentation/*
+!dataset/segmentation/README.md
+runs/*
+!runs/detect/
+runs/detect/*
+!runs/detect/README.md
+!runs/segment/
+runs/segment/*
+!runs/segment/README.md
 railgallery_photos/
 yolo-seg/
 *.pt

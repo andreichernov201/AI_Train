@@ -1872,6 +1872,51 @@ button:hover {
 .export-yolo-options[hidden] {
   display: none !important;
 }
+.export-layout-options {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.export-flat-start-row,
+.export-validation-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 8px;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.export-flat-start-row {
+  display: none;
+}
+
+.export-layout-options:has(#export-flat-layout:checked) .export-flat-start-row {
+  display: flex;
+}
+
+#export-summary-overlay:has(#export-flat-layout:checked) #export-category-numbering {
+  display: none !important;
+}
+
+#export-flat-start-number,
+#export-validation-percent {
+  width: 86px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  color: var(--text-main);
+  padding: 6px 8px;
+  text-align: right;
+}
+
+.export-validation-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
 
 .export-review-filter {
   margin-top: 12px;
