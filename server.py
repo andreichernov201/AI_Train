@@ -2,6 +2,8 @@ import io
 import os
 from typing import Any
 
+import cv2
+import numpy as np
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -21,6 +23,8 @@ DETECTION_CLASS_NAMES = frozenset({"train", "number"})
 SEGMENTATION_CLASS_NAMES = frozenset(
     {"body", "autocoupler", "axlebox", "bogie", "hose"}
 )
+DEFAULT_SEGMENTATION_CONFIDENCE = 0.39
+DEFAULT_SEGMENTATION_IMAGE_SIZE = 1280
 
 
 def _latest_best_pt(search_roots: tuple[str, ...]) -> str | None:
@@ -103,6 +107,84 @@ def get_segmentation_model() -> YOLO:
         _segmentation_model_cache = (*signature, YOLO(path))
     return _segmentation_model_cache[3]
 
+
+def _segmentation_confidence() -> float:
+    raw = os.environ.get("AI_TRAIN_SEG_CONF", "").strip()
+    try:
+        value = float(raw) if raw else DEFAULT_SEGMENTATION_CONFIDENCE
+    except ValueError:
+        return DEFAULT_SEGMENTATION_CONFIDENCE
+    return min(1.0, max(0.0, value))
+
+
+def _segmentation_image_size() -> int:
+    raw = os.environ.get("AI_TRAIN_SEG_IMGSZ", "").strip()
+    try:
+        value = int(raw) if raw else DEFAULT_SEGMENTATION_IMAGE_SIZE
+    except ValueError:
+        return DEFAULT_SEGMENTATION_IMAGE_SIZE
+    return max(32, value)
+
+
+def _largest_mask_polygons(masks: Any) -> list[np.ndarray]:
+    """Оставляет главный связный компонент маски без склейки удалённых островков."""
+    data = getattr(masks, "data", None)
+    if data is None:
+        return []
+    if hasattr(data, "detach"):
+        data = data.detach()
+    if hasattr(data, "cpu"):
+        data = data.cpu()
+    if hasattr(data, "numpy"):
+        data = data.numpy()
+    mask_data = np.asarray(data)
+    if mask_data.ndim == 2:
+        mask_data = mask_data[None, ...]
+    if mask_data.ndim != 3 or not mask_data.shape[1] or not mask_data.shape[2]:
+        return []
+
+    mask_height, mask_width = mask_data.shape[1:]
+    orig_shape = getattr(masks, "orig_shape", None)
+    if orig_shape is None:
+        orig_shape = (mask_height, mask_width)
+    target_height, target_width = int(orig_shape[0]), int(orig_shape[1])
+    scale_x = target_width / mask_width
+    scale_y = target_height / mask_height
+
+    polygons: list[np.ndarray] = []
+    for mask in mask_data:
+        binary = np.ascontiguousarray(mask > 0.5, dtype=np.uint8)
+        contours = cv2.findContours(
+            binary,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE,
+        )[-2]
+        contours = [
+            contour for contour in contours if cv2.contourArea(contour) > 0
+        ]
+        if not contours:
+            polygons.append(np.empty((0, 2), dtype=np.float32))
+            continue
+
+        contour = max(contours, key=cv2.contourArea)
+        polygon = contour.reshape(-1, 2).astype(np.float32)
+        if len(polygon) < 3:
+            polygons.append(np.empty((0, 2), dtype=np.float32))
+            continue
+        polygon[:, 0] = np.clip(
+            polygon[:, 0] * scale_x,
+            0,
+            target_width - 1,
+        )
+        polygon[:, 1] = np.clip(
+            polygon[:, 1] * scale_y,
+            0,
+            target_height - 1,
+        )
+        polygons.append(polygon)
+    return polygons
+
+
 def yolo_result_to_detections(
     res: Any,
     include_segments: bool = False,
@@ -117,9 +199,11 @@ def yolo_result_to_detections(
     conf = boxes.conf.tolist()
     cls = boxes.cls.tolist()
     masks = getattr(res, "masks", None)
-    polygons = []
-    if include_segments and masks is not None and getattr(masks, "xy", None) is not None:
-        polygons = masks.xy
+    polygons = (
+        _largest_mask_polygons(masks)
+        if include_segments and masks is not None
+        else []
+    )
 
     detections: list[dict[str, Any]] = []
     for i, (b, c, k) in enumerate(zip(xyxy, conf, cls)):
@@ -134,9 +218,12 @@ def yolo_result_to_detections(
             "conf": float(c),
             "box": [float(b[0]), float(b[1]), float(b[2]), float(b[3])],
         }
-        if include_segments and i < len(polygons):
-            poly = polygons[i]
-            row["segment"] = [[float(x), float(y)] for x, y in poly.tolist()]
+        if include_segments:
+            if i >= len(polygons) or len(polygons[i]) < 3:
+                continue
+            row["segment"] = [
+                [float(x), float(y)] for x, y in polygons[i].tolist()
+            ]
         detections.append(row)
     return detections
 
@@ -144,7 +231,13 @@ def yolo_result_to_detections(
 def segment_full_image(img: Image.Image) -> list[dict[str, Any]]:
     """Сегментация на полном кадре; полигоны уже в координатах исходного изображения."""
     segment_model = get_segmentation_model()
-    seg_res = segment_model(img, verbose=False, retina_masks=True)[0]
+    seg_res = segment_model(
+        img,
+        verbose=False,
+        retina_masks=True,
+        imgsz=_segmentation_image_size(),
+        conf=_segmentation_confidence(),
+    )[0]
     return yolo_result_to_detections(
         seg_res,
         include_segments=True,
