@@ -22,7 +22,10 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Обучение YOLO Detect")
     parser.add_argument(
         "--data",
-        help="ZIP с сайта, папка датасета или data.yaml. Без параметра берётся самый свежий dataset/detection/**/data.yaml.",
+        help=(
+            "ZIP с сайта, папка датасета или YAML. Без параметра автоматически "
+            "ищется конфигурация детекции в dataset/."
+        ),
     )
     parser.add_argument("--model", default="yolo11m.pt", help="Стартовая модель или checkpoint")
     parser.add_argument("--name", help="Понятная подпись запуска; дата и время добавятся автоматически")

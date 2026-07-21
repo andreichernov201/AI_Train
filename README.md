@@ -45,6 +45,19 @@ dataset/
   segmentation/
 ```
 
+Полный архив проекта можно распаковать прямо в корень `dataset/`, как он скачан с сайта:
+
+```text
+dataset/
+  data.detect.yaml
+  data.segment.yaml
+  images/
+  labels/
+  project.json
+```
+
+Скрипт сам выберет YAML нужной задачи и подготовит внутри игнорируемой папки `dataset/.prepared/` совместимое с YOLO представление. Исходные файлы не перемещаются и не дублируются, если файловая система поддерживает жёсткие ссылки. Папка `test` не создаётся.
+
 Можно распаковать содержимое ZIP с сайта прямо в соответствующую папку и запустить:
 
 ```powershell
@@ -59,9 +72,9 @@ python tools/detect/train.py --data "C:\Downloads\yolo_detect.zip"
 python tools/segmentation/train.py --data "C:\Downloads\yolo_segment.zip"
 ```
 
-`--data` также принимает папку или конкретный `data.yaml`. Полезные параметры обоих скриптов: `--model`, `--name`, `--epochs`, `--batch`, `--imgsz`, `--device`, `--workers`, `--cache`. Полный список: `python tools/detect/train.py --help`.
+`--data` также принимает папку или конкретный YAML. Полезные параметры обоих скриптов: `--model`, `--name`, `--epochs`, `--batch`, `--imgsz`, `--device`, `--workers`, `--cache`. Полный список: `python tools/detect/train.py --help`.
 
-Без `--data` выбирается самый свежий `data.yaml` внутри соответствующей папки. Старый экспорт с `path: .` автоматически получает локальный переносимый `data.local.yaml`.
+Без `--data` сначала ищется YAML внутри папки соответствующей задачи, затем — подходящий `data.detect.yaml`, `data.segment.yaml` или `data.yaml` во всём `dataset/`. Старый экспорт с `path: .` автоматически получает локальный переносимый `data.local.yaml`.
 
 ## Результаты и модели сайта
 

@@ -59,6 +59,47 @@ class TrainingCommonTests(unittest.TestCase):
 
             self.assertEqual(resolve_dataset_yaml(root, "detect"), newer.resolve())
 
+    def test_full_project_extracted_into_dataset_root_is_ready_for_training(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset = root / "dataset"
+            (dataset / "images" / "train").mkdir(parents=True)
+            (dataset / "images" / "val").mkdir(parents=True)
+            (dataset / "labels" / "detect" / "train").mkdir(parents=True)
+            (dataset / "labels" / "detect" / "val").mkdir(parents=True)
+            (dataset / "labels" / "segment" / "train").mkdir(parents=True)
+            (dataset / "labels" / "segment" / "val").mkdir(parents=True)
+            (dataset / "project.json").write_text("{}", encoding="utf-8")
+            (dataset / "data.detect.yaml").write_text(
+                "task: detect\nnames:\n  0: train\n  1: number\n",
+                encoding="utf-8",
+            )
+            (dataset / "data.segment.yaml").write_text(
+                "task: segment\nnames:\n  0: body\n",
+                encoding="utf-8",
+            )
+            (dataset / "images" / "train" / "001.png").write_bytes(b"train-image")
+            (dataset / "images" / "val" / "002.png").write_bytes(b"val-image")
+            (dataset / "labels" / "detect" / "train" / "001.txt").write_text(
+                "0 0.5 0.5 0.2 0.2\n", encoding="utf-8"
+            )
+            (dataset / "labels" / "detect" / "val" / "002.txt").write_text(
+                "1 0.5 0.5 0.2 0.2\n", encoding="utf-8"
+            )
+
+            yaml_path = resolve_dataset_yaml(root, "detect")
+
+            expected = (dataset / ".prepared" / "detect" / "data.yaml").resolve()
+            self.assertEqual(yaml_path, expected)
+            text = yaml_path.read_text(encoding="utf-8")
+            self.assertIn("train: images/train", text)
+            self.assertIn("val: images/val", text)
+            self.assertIn("task: detect", text)
+            self.assertNotIn("body", text)
+            self.assertTrue((yaml_path.parent / "images" / "train" / "001.png").is_file())
+            self.assertTrue((yaml_path.parent / "labels" / "train" / "001.txt").is_file())
+            self.assertFalse((yaml_path.parent / "images" / "test").exists())
+
     def test_run_name_is_timestamped_and_sanitized(self) -> None:
         name = build_run_name("yolo11m.pt", "мой запуск")
         self.assertRegex(name, r"^\d{8}_\d{6}_мой_запуск$")

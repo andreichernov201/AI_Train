@@ -22,7 +22,10 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Обучение YOLO Segmentation")
     parser.add_argument(
         "--data",
-        help="ZIP с сайта, папка датасета или data.yaml. Без параметра берётся самый свежий dataset/segmentation/**/data.yaml.",
+        help=(
+            "ZIP с сайта, папка датасета или YAML. Без параметра автоматически "
+            "ищется конфигурация сегментации в dataset/."
+        ),
     )
     parser.add_argument(
         "--model",
