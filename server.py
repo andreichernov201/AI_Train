@@ -25,6 +25,8 @@ SEGMENTATION_CLASS_NAMES = frozenset(
 )
 DEFAULT_SEGMENTATION_CONFIDENCE = 0.39
 DEFAULT_SEGMENTATION_IMAGE_SIZE = 1280
+SEGMENTATION_DUPLICATE_IOU = 0.65
+SEGMENTATION_DUPLICATE_CONTAINMENT = 0.90
 
 
 def _latest_best_pt(search_roots: tuple[str, ...]) -> str | None:
@@ -126,11 +128,13 @@ def _segmentation_image_size() -> int:
     return max(32, value)
 
 
-def _largest_mask_polygons(masks: Any) -> list[np.ndarray]:
+def _largest_mask_components(
+    masks: Any,
+) -> tuple[list[np.ndarray], list[np.ndarray]]:
     """Оставляет главный связный компонент маски без склейки удалённых островков."""
     data = getattr(masks, "data", None)
     if data is None:
-        return []
+        return [], []
     if hasattr(data, "detach"):
         data = data.detach()
     if hasattr(data, "cpu"):
@@ -141,7 +145,7 @@ def _largest_mask_polygons(masks: Any) -> list[np.ndarray]:
     if mask_data.ndim == 2:
         mask_data = mask_data[None, ...]
     if mask_data.ndim != 3 or not mask_data.shape[1] or not mask_data.shape[2]:
-        return []
+        return [], []
 
     mask_height, mask_width = mask_data.shape[1:]
     orig_shape = getattr(masks, "orig_shape", None)
@@ -152,6 +156,7 @@ def _largest_mask_polygons(masks: Any) -> list[np.ndarray]:
     scale_y = target_height / mask_height
 
     polygons: list[np.ndarray] = []
+    components: list[np.ndarray] = []
     for mask in mask_data:
         binary = np.ascontiguousarray(mask > 0.5, dtype=np.uint8)
         contours = cv2.findContours(
@@ -164,13 +169,17 @@ def _largest_mask_polygons(masks: Any) -> list[np.ndarray]:
         ]
         if not contours:
             polygons.append(np.empty((0, 2), dtype=np.float32))
+            components.append(np.empty((0, 0), dtype=bool))
             continue
 
         contour = max(contours, key=cv2.contourArea)
         polygon = contour.reshape(-1, 2).astype(np.float32)
         if len(polygon) < 3:
             polygons.append(np.empty((0, 2), dtype=np.float32))
+            components.append(np.empty((0, 0), dtype=bool))
             continue
+        component = np.zeros_like(binary)
+        cv2.drawContours(component, [contour], -1, 1, thickness=cv2.FILLED)
         polygon[:, 0] = np.clip(
             polygon[:, 0] * scale_x,
             0,
@@ -182,7 +191,50 @@ def _largest_mask_polygons(masks: Any) -> list[np.ndarray]:
             target_height - 1,
         )
         polygons.append(polygon)
-    return polygons
+        components.append(component.astype(bool, copy=False))
+    return polygons, components
+
+
+def _unique_mask_indices(
+    components: list[np.ndarray],
+    confidence: list[float],
+    classes: list[float],
+) -> set[int]:
+    """Подавляет повторные маски одного класса, сохраняя самую уверенную."""
+    limit = min(len(components), len(confidence), len(classes))
+    areas = [int(np.count_nonzero(component)) for component in components[:limit]]
+    order = sorted(
+        range(limit),
+        key=lambda index: (float(confidence[index]), areas[index]),
+        reverse=True,
+    )
+    kept: list[int] = []
+    for index in order:
+        if areas[index] <= 0:
+            continue
+        duplicate = False
+        for existing in kept:
+            if int(classes[index]) != int(classes[existing]):
+                continue
+            if components[index].shape != components[existing].shape:
+                continue
+            intersection = int(
+                np.count_nonzero(components[index] & components[existing])
+            )
+            if intersection <= 0:
+                continue
+            union = areas[index] + areas[existing] - intersection
+            mask_iou = intersection / union if union else 0.0
+            containment = intersection / min(areas[index], areas[existing])
+            if (
+                mask_iou >= SEGMENTATION_DUPLICATE_IOU
+                or containment >= SEGMENTATION_DUPLICATE_CONTAINMENT
+            ):
+                duplicate = True
+                break
+        if not duplicate:
+            kept.append(index)
+    return set(kept)
 
 
 def yolo_result_to_detections(
@@ -199,10 +251,13 @@ def yolo_result_to_detections(
     conf = boxes.conf.tolist()
     cls = boxes.cls.tolist()
     masks = getattr(res, "masks", None)
-    polygons = (
-        _largest_mask_polygons(masks)
+    polygons, components = (
+        _largest_mask_components(masks)
         if include_segments and masks is not None
-        else []
+        else ([], [])
+    )
+    unique_mask_indices = (
+        _unique_mask_indices(components, conf, cls) if include_segments else set()
     )
 
     detections: list[dict[str, Any]] = []
@@ -219,7 +274,11 @@ def yolo_result_to_detections(
             "box": [float(b[0]), float(b[1]), float(b[2]), float(b[3])],
         }
         if include_segments:
-            if i >= len(polygons) or len(polygons[i]) < 3:
+            if (
+                i not in unique_mask_indices
+                or i >= len(polygons)
+                or len(polygons[i]) < 3
+            ):
                 continue
             row["segment"] = [
                 [float(x), float(y)] for x, y in polygons[i].tolist()
