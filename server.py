@@ -10,6 +10,15 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps
 from ultralytics import YOLO
 
+from analysis.detection import AnalysisDetector
+from analysis.jobs import AnalysisJobManager
+from analysis.ocr.paddle_provider import PaddleOCRProvider
+from analysis.pipeline import AnalysisPipeline
+from analysis.segmentation import AnalysisSegmenter
+from analysis.routes import create_analysis_router
+from analysis.series_reference import SeriesReference
+from analysis.storage import AnalysisStorage
+
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.join(ROOT_DIR, "frontend")
@@ -315,6 +324,42 @@ def read_upload_image(file: UploadFile, raw: bytes) -> Image.Image | JSONRespons
 
 
 app = FastAPI()
+
+ANALYSIS_DATA_DIR = os.environ.get(
+    "AI_TRAIN_ANALYSIS_DATA_DIR", os.path.join(ROOT_DIR, "analysis_data")
+)
+analysis_storage = AnalysisStorage(ANALYSIS_DATA_DIR)
+analysis_reference = SeriesReference()
+analysis_ocr = PaddleOCRProvider()
+analysis_detector = AnalysisDetector(
+    get_model,
+    yolo_result_to_detections,
+    DETECTION_CLASS_NAMES,
+)
+analysis_segmenter = AnalysisSegmenter(
+    segment_full_image,
+    model_name=os.path.basename(resolve_segmentation_model_path()),
+)
+analysis_pipeline = AnalysisPipeline(
+    analysis_storage,
+    analysis_detector,
+    analysis_ocr,
+    analysis_reference,
+    analysis_segmenter,
+)
+analysis_jobs = AnalysisJobManager(
+    analysis_storage,
+    analysis_pipeline,
+    max_workers=int(os.environ.get("AI_TRAIN_ANALYSIS_WORKERS", "1")),
+)
+app.include_router(
+    create_analysis_router(
+        analysis_storage,
+        analysis_jobs,
+        analysis_ocr,
+        analysis_reference,
+    )
+)
 
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 

@@ -1,0 +1,586 @@
+.analysis-diagram {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 9px;
+  margin-top: 8px;
+  overflow: visible;
+}
+
+.analysis-diagram-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px;
+}
+
+.analysis-diagram-summary strong {
+  color: var(--text-main);
+  font-size: 11px;
+}
+
+.analysis-diagram-summary span {
+  color: var(--text-muted);
+  font-size: 9px;
+  text-align: right;
+}
+
+.analysis-locomotive-track {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 1px 1px 6px;
+  overflow-x: auto;
+}
+
+.analysis-locomotive {
+  position: relative;
+  min-width: 270px;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: linear-gradient(155deg, rgba(29, 36, 48, 0.98), rgba(10, 13, 18, 0.98));
+  color: var(--text-main);
+  text-align: left;
+  transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
+}
+
+.analysis-locomotive:hover,
+.analysis-locomotive:focus-visible {
+  border-color: var(--accent);
+  background: linear-gradient(155deg, rgba(35, 47, 64, 0.98), rgba(12, 17, 24, 0.98));
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.analysis-locomotive--success {
+  box-shadow: inset 3px 0 0 #4ade80;
+}
+
+.analysis-locomotive--warning {
+  box-shadow: inset 3px 0 0 #facc15;
+}
+
+.analysis-locomotive--danger {
+  box-shadow: inset 3px 0 0 #fb7185;
+}
+
+.analysis-locomotive-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.analysis-locomotive-index {
+  color: var(--text-soft);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.analysis-locomotive-status {
+  padding: 3px 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.analysis-locomotive-status--success {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.analysis-locomotive-status--warning {
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.08);
+}
+
+.analysis-locomotive-status--danger {
+  color: #fb7185;
+  background: rgba(251, 113, 133, 0.08);
+}
+
+.analysis-locomotive-visual {
+  position: relative;
+  min-height: 52px;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 4px 8px 14px;
+  border-radius: 8px;
+  background: rgba(3, 6, 10, 0.5);
+  overflow: hidden;
+}
+
+.analysis-locomotive-visual::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  bottom: 6px;
+  left: 5px;
+  height: 2px;
+  border-radius: 2px;
+  background: #64748b;
+}
+
+.analysis-locomotive-section {
+  position: relative;
+  z-index: 1;
+  width: 54px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #64748b;
+  background: linear-gradient(180deg, #475569, #1e293b);
+}
+
+.analysis-locomotive-section::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 7px;
+  left: 7px;
+  height: 9px;
+  border: 1px solid rgba(191, 219, 254, 0.45);
+  border-radius: 2px;
+  background: rgba(96, 165, 250, 0.16);
+}
+
+.analysis-locomotive-section::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 9px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #0b0f15;
+  border-radius: 50%;
+  background: #94a3b8;
+  box-shadow: 23px 0 0 -2px #94a3b8, 23px 0 0 0 #0b0f15;
+}
+
+.analysis-locomotive-section:first-child {
+  border-radius: 11px 2px 3px 5px;
+}
+
+.analysis-locomotive-section:last-child {
+  border-radius: 2px 11px 5px 3px;
+}
+
+.analysis-locomotive-section-number {
+  position: relative;
+  z-index: 1;
+  margin-top: 15px;
+  color: #e2e8f0;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.analysis-locomotive-visual[data-unknown-sections="true"] .analysis-locomotive-section {
+  width: 72px;
+  border-radius: 11px 11px 5px 5px;
+  background: repeating-linear-gradient(135deg, #475569, #475569 6px, #1e293b 6px, #1e293b 12px);
+}
+.analysis-locomotive-visual {
+  min-height: 62px;
+  display: block;
+  padding: 5px 8px 16px;
+}
+
+.analysis-locomotive-body {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 42px;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  border: 1px solid #64748b;
+  border-radius: 13px 13px 5px 5px;
+  background: linear-gradient(180deg, #475569, #1e293b);
+  box-shadow: inset 0 -5px 0 rgba(5, 8, 13, 0.28);
+}
+
+.analysis-locomotive-cab {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 5px;
+  color: #cbd5e1;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.analysis-locomotive-cab::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  width: 22px;
+  height: 11px;
+  border: 1px solid rgba(191, 219, 254, 0.55);
+  border-radius: 3px 3px 2px 2px;
+  background: rgba(96, 165, 250, 0.2);
+}
+
+.analysis-locomotive-cab::after {
+  content: "";
+  position: absolute;
+  bottom: -8px;
+  left: 8px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #0b0f15;
+  border-radius: 50%;
+  background: #94a3b8;
+  box-shadow: 15px 0 0 -2px #94a3b8, 15px 0 0 0 #0b0f15;
+}
+
+.analysis-locomotive-cab--left {
+  border-right: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 12px 0 0 4px;
+}
+
+.analysis-locomotive-cab--right {
+  border-left: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 0 12px 4px 0;
+}
+
+.analysis-locomotive-cab--left::before {
+  transform: skewX(-8deg);
+}
+
+.analysis-locomotive-cab--right::before {
+  transform: skewX(8deg);
+}
+
+.analysis-locomotive-sections {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px;
+  background: rgba(8, 13, 21, 0.22);
+}
+
+.analysis-locomotive-sections .analysis-locomotive-section {
+  position: relative;
+  width: auto;
+  min-width: 14px;
+  max-width: 24px;
+  height: 24px;
+  flex: 1 1 18px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.analysis-locomotive-sections .analysis-locomotive-section::before,
+.analysis-locomotive-sections .analysis-locomotive-section::after {
+  content: none;
+}
+
+.analysis-locomotive-sections .analysis-locomotive-section-number {
+  margin: 0;
+  color: #e2e8f0;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.analysis-locomotive-visual[data-unknown-sections="true"] .analysis-locomotive-sections .analysis-locomotive-section {
+  width: 36px;
+  flex: 0 0 36px;
+  border-radius: 4px;
+  background: repeating-linear-gradient(135deg, #475569, #475569 6px, #1e293b 6px, #1e293b 12px);
+}
+.analysis-locomotive-visual[data-double-sided="true"] .analysis-locomotive-body {
+  border-color: rgba(96, 165, 250, 0.78);
+}
+
+.analysis-locomotive-sections .analysis-locomotive-section.is-double-sided {
+  width: 100%;
+  min-width: 76px;
+  max-width: 110px;
+  flex: 1 1 100%;
+  border-color: rgba(96, 165, 250, 0.58);
+  background: rgba(30, 64, 111, 0.56);
+}
+
+.analysis-locomotive-sections .analysis-locomotive-section.is-double-sided .analysis-locomotive-section-number {
+  color: #dbeafe;
+  font-size: 8px;
+  letter-spacing: 0.02em;
+.analysis-locomotive-body[data-section-count="2"] {
+  width: 224px;
+  gap: 8px;
+}
+
+.analysis-locomotive-body[data-section-count="2"]::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 27px;
+  left: 50%;
+  width: 14px;
+  height: 4px;
+  border: 1px solid #0b0f15;
+  border-radius: 2px;
+  background: #64748b;
+  transform: translateX(-50%);
+}
+
+.analysis-locomotive-body[data-section-count="2"] > .analysis-locomotive-section {
+  z-index: 1;
+  flex-basis: 108px;
+}
+
+  white-space: nowrap;
+}
+.analysis-locomotive-visual {
+  min-height: 60px;
+  padding: 5px 8px 16px;
+}
+
+.analysis-locomotive-body.analysis-locomotive-sections {
+  width: calc(142px + (var(--section-count) - 1) * 66px);
+  min-width: 142px;
+  max-width: 100%;
+  height: 40px;
+  display: flex;
+  grid-template-columns: none;
+  align-items: stretch;
+  justify-content: center;
+  gap: 2px;
+  margin: 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.analysis-locomotive-body.analysis-locomotive-sections > .analysis-locomotive-section {
+  position: relative;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  height: 40px;
+  flex: 1 1 66px;
+  display: flex;
+  align-items: stretch;
+  overflow: visible;
+  border: 1px solid #64748b;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #475569, #1e293b);
+  box-shadow: inset 0 -4px 0 rgba(5, 8, 13, 0.28);
+}
+
+.analysis-locomotive-body.analysis-locomotive-sections > .analysis-locomotive-section:first-child {
+  border-radius: 10px 2px 3px 5px;
+}
+
+.analysis-locomotive-body.analysis-locomotive-sections > .analysis-locomotive-section:last-child {
+  border-radius: 2px 10px 5px 3px;
+}
+
+.analysis-locomotive-body.analysis-locomotive-sections > .analysis-locomotive-section:only-child {
+  border-radius: 14px 14px 6px 6px;
+}
+
+.analysis-locomotive-body.analysis-locomotive-sections > .analysis-locomotive-section::before {
+  content: none;
+}
+
+.analysis-locomotive-body.analysis-locomotive-sections > .analysis-locomotive-section::after {
+  content: "";
+  position: absolute;
+  bottom: -7px;
+  left: calc(50% - 19px);
+  width: 9px;
+  height: 9px;
+  border: 2px solid #0b0f15;
+  border-radius: 50%;
+  background: #94a3b8;
+  box-shadow: 22px 0 0 -2px #94a3b8, 22px 0 0 0 #0b0f15;
+}
+
+.analysis-locomotive-body.analysis-locomotive-sections > .analysis-locomotive-section:only-child::after {
+  left: 18px;
+  box-shadow:
+    22px 0 0 -2px #94a3b8,
+    22px 0 0 0 #0b0f15,
+    76px 0 0 -2px #94a3b8,
+    76px 0 0 0 #0b0f15,
+    98px 0 0 -2px #94a3b8,
+    98px 0 0 0 #0b0f15;
+}
+
+.analysis-locomotive-body .analysis-locomotive-cab {
+  position: relative;
+  width: auto;
+  height: 100%;
+  flex: 0 0 31px;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: rgba(30, 41, 59, 0.72);
+  color: transparent;
+}
+
+.analysis-locomotive-body .analysis-locomotive-cab::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  width: 19px;
+  height: 10px;
+  border: 1px solid rgba(191, 219, 254, 0.58);
+  border-radius: 3px 3px 2px 2px;
+  background: rgba(96, 165, 250, 0.22);
+}
+
+.analysis-locomotive-body .analysis-locomotive-cab::after {
+  content: "";
+  position: absolute;
+  top: 20px;
+  bottom: auto;
+  left: auto;
+  width: 4px;
+  height: 4px;
+  border: 0;
+  border-radius: 50%;
+  background: #fef3c7;
+  box-shadow: 0 0 4px rgba(254, 243, 199, 0.72);
+}
+
+.analysis-locomotive-body .analysis-locomotive-cab--left {
+  border-right: 1px solid rgba(148, 163, 184, 0.32);
+  clip-path: polygon(18% 0, 100% 0, 100% 100%, 0 100%, 0 24%);
+}
+
+.analysis-locomotive-body .analysis-locomotive-cab--left::before {
+  left: 6px;
+  transform: skewX(-8deg);
+}
+
+.analysis-locomotive-body .analysis-locomotive-cab--left::after {
+  left: 3px;
+}
+
+.analysis-locomotive-body .analysis-locomotive-cab--right {
+  border-left: 1px solid rgba(148, 163, 184, 0.32);
+  clip-path: polygon(0 0, 82% 0, 100% 24%, 100% 100%, 0 100%);
+}
+
+.analysis-locomotive-body .analysis-locomotive-cab--right::before {
+  right: 6px;
+  transform: skewX(8deg);
+}
+
+.analysis-locomotive-body .analysis-locomotive-cab--right::after {
+  right: 3px;
+}
+
+.analysis-locomotive-equipment {
+  position: relative;
+  min-width: 44px;
+  flex: 1 1 auto;
+  background: rgba(15, 23, 42, 0.22);
+}
+
+.analysis-locomotive-equipment::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: 7px;
+  bottom: 10px;
+  left: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0.22) 0 2px,
+    transparent 2px 6px
+  );
+}
+
+.analysis-locomotive-visual[data-double-sided="true"] .analysis-locomotive-body > .analysis-locomotive-section {
+  border-color: rgba(96, 165, 250, 0.7);
+}
+
+.analysis-locomotive-visual[data-unknown-sections="true"] .analysis-locomotive-body.analysis-locomotive-sections > .analysis-locomotive-section {
+  width: auto;
+  flex: 1 1 auto;
+  border-style: dashed;
+  background: repeating-linear-gradient(135deg, #475569, #475569 6px, #1e293b 6px, #1e293b 12px);
+}
+
+
+
+.analysis-locomotive-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.analysis-locomotive-text strong {
+  color: #f8fafc;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.analysis-locomotive-series {
+  color: #93c5fd;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.analysis-locomotive-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.analysis-locomotive-facts span {
+  padding: 5px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text-soft);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.analysis-locomotive-hint {
+  color: var(--text-muted);
+  font-size: 8px;
+}
+
+@media (max-width: 760px) {
+  .analysis-diagram-summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .analysis-diagram-summary span {
+    text-align: left;
+  }
+
+  .analysis-locomotive {
+    min-width: 235px;
+  }
+}

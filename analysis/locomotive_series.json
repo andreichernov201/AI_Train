@@ -1,0 +1,84 @@
+{
+  "version": "2026-07-21",
+  "series": {
+    "ЭП20": {
+      "aliases": ["ЭП20", "EP20", "EП20", "ЭP20"],
+      "full_patterns": ["^ЭП20[- ]?\\d{2,4}$"],
+      "series_patterns": ["^ЭП20$"],
+      "serial_patterns": ["^\\d{2,4}$"],
+      "join_template": "{series}-{serial}",
+      "default_section_count": 1,
+      "shared_number_between_sections": false,
+      "graphic_type": "single",
+      "priority": 100
+    },
+    "ВЛ80С": {
+      "aliases": ["ВЛ80С", "VL80S", "VЛ80C", "ВL80C"],
+      "full_patterns": ["^ВЛ80С[- ]?\\d{2,5}$"],
+      "series_patterns": ["^ВЛ80С$"],
+      "serial_patterns": ["^\\d{2,5}$"],
+      "join_template": "{series}-{serial}",
+      "default_section_count": 2,
+      "shared_number_between_sections": true,
+      "graphic_type": "multi_section",
+      "priority": 120
+    },
+    "ВЛ10": {
+      "aliases": ["ВЛ10", "VL10", "VЛ10"],
+      "full_patterns": ["^ВЛ10[- ]?\\d{2,5}$"],
+      "series_patterns": ["^ВЛ10$"],
+      "serial_patterns": ["^\\d{2,5}$"],
+      "join_template": "{series}-{serial}",
+      "default_section_count": 2,
+      "shared_number_between_sections": true,
+      "graphic_type": "multi_section",
+      "priority": 110
+    },
+    "2ЭС6": {
+      "aliases": ["2ЭС6", "2ES6", "2ЭC6", "2EC6"],
+      "full_patterns": ["^2ЭС6[- ]?\\d{2,5}$"],
+      "series_patterns": ["^2ЭС6$"],
+      "serial_patterns": ["^\\d{2,5}$"],
+      "join_template": "{series}-{serial}",
+      "default_section_count": 2,
+      "shared_number_between_sections": true,
+      "graphic_type": "multi_section",
+      "priority": 110
+    },
+    "3ЭС5К": {
+      "aliases": ["3ЭС5К", "3ES5K", "3ЭC5K"],
+      "full_patterns": ["^3ЭС5К[- ]?\\d{2,5}$"],
+      "series_patterns": ["^3ЭС5К$"],
+      "serial_patterns": ["^\\d{2,5}$"],
+      "join_template": "{series}-{serial}",
+      "default_section_count": 3,
+      "shared_number_between_sections": true,
+      "graphic_type": "multi_section",
+      "priority": 110
+    },
+    "ВЛ": {
+      "aliases": ["ВЛ", "VL", "VЛ"],
+      "family_prefix": "ВЛ",
+      "default_section_count": 2,
+      "shared_number_between_sections": true,
+      "graphic_type": "multi_section",
+      "priority": 10
+    },
+    "2ЭС": {
+      "aliases": ["2ЭС", "2ES", "2ЭC"],
+      "family_prefix": "2ЭС",
+      "default_section_count": 2,
+      "shared_number_between_sections": true,
+      "graphic_type": "multi_section",
+      "priority": 10
+    },
+    "3ЭС": {
+      "aliases": ["3ЭС", "3ES", "3ЭC"],
+      "family_prefix": "3ЭС",
+      "default_section_count": 3,
+      "shared_number_between_sections": true,
+      "graphic_type": "multi_section",
+      "priority": 10
+    }
+  }
+}

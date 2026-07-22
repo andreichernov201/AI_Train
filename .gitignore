@@ -34,6 +34,9 @@ Desktop.ini
 .env.*
 
 # Logs
+# Local analysis sessions, uploads, evidence and SQLite database
+analysis_data/
+
 *.log
 
 # Frontend deps (если появятся)

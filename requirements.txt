@@ -3,3 +3,5 @@ uvicorn[standard]
 ultralytics
 pillow
 python-multipart
+paddleocr==3.7.0
+paddlepaddle==3.3.1

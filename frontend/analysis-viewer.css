@@ -1,0 +1,62 @@
+.analysis-viewer-surface {
+  position: relative;
+  overflow: hidden;
+  background: #07080a;
+  touch-action: none;
+}
+
+.analysis-viewer-surface img,
+.analysis-viewer-surface video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  display: block;
+  object-fit: contain;
+  object-position: center center;
+  user-select: none;
+}
+
+/* Author display rules must never override the viewer's active media state. */
+.analysis-viewer-surface > [hidden] {
+  display: none !important;
+}
+.analysis-viewer-surface canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.analysis-viewer-surface.is-zoomed {
+  cursor: grab;
+}
+
+.analysis-viewer-surface.is-panning {
+  cursor: grabbing;
+}
+
+.analysis-viewer-surface.is-zoomed::before {
+  content: attr(data-zoom);
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  z-index: 3;
+  padding: 4px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: rgba(7, 8, 10, 0.78);
+  color: var(--text-main);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+@media (max-width: 980px) {
+  .analysis-zoom-hint {
+    display: none;
+  }
+}
