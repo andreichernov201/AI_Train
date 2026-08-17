@@ -39,7 +39,7 @@ export function isVideoFile(file) {
   return false;
 }
 /**
- * Ограничить время допустимым диапазоном видео.
+ * Не даём выйти за границы видео.
  * @param {HTMLVideoElement} video
  * @param {number} timeSec
  */
@@ -52,7 +52,7 @@ function normalizedVideoTime(video, timeSec) {
 }
 
 /**
- * Перемотать видео и дождаться готовности кадра.
+ * Перематываем видео и ждём, пока кадр будет готов.
  * @param {HTMLVideoElement} video
  * @param {number} timeSec
  */
@@ -111,7 +111,7 @@ function canvasToPngBlob(canvas) {
 }
 
 /**
- * Снимок кадра с видео в момент timeSec.
+ * Снимаем кадр в момент `timeSec`.
  * @param {HTMLVideoElement} video
  * @param {number} timeSec
  * @returns {Promise<Blob>}
@@ -129,8 +129,8 @@ export async function captureVideoFrameAt(video, timeSec) {
 }
 
 /**
- * Оценка резкости через дисперсию лапласиана яркости.
- * Чем больше значение, тем больше мелких резких границ в кадре.
+ * Резкость оцениваем по дисперсии лапласиана.
+ * Чем выше число, тем больше в кадре чётких мелких границ.
  * @param {Uint8ClampedArray|number[]} rgba
  * @param {number} width
  * @param {number} height
@@ -166,8 +166,7 @@ export function calculateFrameSharpness(rgba, width, height) {
 }
 
 /**
- * Кандидаты вокруг планового времени. Радиус ограничен, чтобы выбранный кадр
- * оставался примерно в заданном пользователем интервале.
+ * Ищем лучший кадр рядом с нужным временем, но не выходим далеко за интервал.
  * @param {number} anchorSec
  * @param {number} intervalSec
  * @param {number} durationSec
@@ -196,7 +195,7 @@ export function buildFrameCandidateTimes(
 }
 
 /**
- * Каждый N-й кадр выбирается как смазанный. 0 и 1 отключают примесь.
+ * Каждый N-й кадр берём смазанным. Ноль и один отключают этот режим.
  * @param {number} frameIndex нулевой индекс
  * @param {number} blurEvery
  */

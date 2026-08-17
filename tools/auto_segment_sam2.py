@@ -1,4 +1,4 @@
-"""Automatic annotation: YOLO detector -> SAM 2 -> PNG masks."""
+"""Автоматическая разметка: детектор YOLO, SAM 2 и маски PNG."""
 
 from __future__ import annotations
 

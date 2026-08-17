@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
-"""Rebuild the YOLO-seg dataset on the original RailGallery photos.
+"""Пересобирает датасет YOLO-seg на исходных фотографиях RailGallery.
 
-The legacy ``yolo-seg`` directory contains two useful groups:
+В старой папке ``yolo-seg`` нужны две группы:
 
-* normally named annotated images;
-* ``*_aug_1`` annotated images.  Their unaugmented reference crops are the
-  uniquely-sized images from ``dataset/segmentation/images/train``.
+* размеченные изображения с обычными именами;
+* размеченные ``*_aug_1``. Их исходные кропы находятся среди изображений
+  уникального размера в ``dataset/segmentation/images/train``.
 
-``*_aug_0`` files are experimental and are deliberately ignored.  The script
-finds every reference crop in the originals collection, composes all required
-image transforms, transfers the segmentation polygons, and aggregates several
-crops that belong to the same original into one label file.
+Экспериментальные ``*_aug_0`` пропускаются. Скрипт находит кропы в исходной
+коллекции, переносит преобразования и полигоны, затем объединяет кропы одной
+фотографии в общий файл разметки.
 """
 
 from __future__ import annotations
@@ -38,7 +37,7 @@ MIN_PHOTOMETRIC_SCORE = 0.90
 
 
 class RebuildError(RuntimeError):
-    """An actionable input, matching, or output error."""
+    """Ошибка входных данных, сопоставления или записи результата."""
 
 
 @dataclass(frozen=True)
@@ -188,7 +187,7 @@ def image_files(directory: Path) -> list[Path]:
 
 
 def read_color(path: Path) -> np.ndarray:
-    """Read images from Unicode Windows paths and honor EXIF orientation."""
+    """Читает пути Windows с Unicode и учитывает ориентацию EXIF."""
     try:
         encoded = np.fromfile(path, dtype=np.uint8)
     except OSError as exc:

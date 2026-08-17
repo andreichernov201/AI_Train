@@ -152,7 +152,7 @@ function exportValidationPercent(opts) {
 }
 
 /**
- * Единая нумерация для плоского архива или прежняя нумерация по категориям.
+ * Плоский архив нумеруем целиком, обычный — по категориям.
  * @param {any[]} items
  * @param {Record<string, any>} opts
  */
@@ -208,8 +208,8 @@ function stableExportRank(im, index) {
 }
 
 /**
- * Детерминированно и по возможности пропорционально категориям делит батч на train/val.
- * Одинаковый батч с теми же именами файлов всегда получает одинаковое разбиение.
+ * Стабильно делим выборку на обучение и проверку, сохраняя пропорции категорий.
+ * При одинаковом наборе файлов разбиение не меняется.
  * @param {any[]} items
  * @param {unknown} validationPercent
  */
@@ -353,7 +353,7 @@ function createEmptyExportObjectCounts() {
 }
 
 /**
- * Считает только те объекты, которые относятся к выбранному виду экспорта.
+ * Считаем только объекты текущего вида экспорта.
  * @param {any[]} images
  * @param {string} [actionKind]
  * @param {ExportReviewFilter|null} [exportFilter]
@@ -834,8 +834,7 @@ export function buildProjectExportDataYaml(task = "detect", opts = {}) {
   const order = yoloClassOrderForTask(task);
   const lines = [];
   if (opts.includeDatasetPaths) {
-    // Без `path: .`: Ultralytics иначе привязывает точку к папке запуска,
-    // а не к расположению YAML. Отсутствующий path делает архив переносимым.
+    // Не добавляем `path: .`: иначе Ultralytics ищет датасет от папки запуска.
     lines.push(
       `train: ${opts.trainPath || "images/train"}`,
       `val: ${opts.valPath || "images/val"}`

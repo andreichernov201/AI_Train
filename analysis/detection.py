@@ -33,7 +33,7 @@ def suppress_duplicate_trains(
     iou_threshold: float = 0.62,
     containment_threshold: float = 0.86,
 ) -> list[dict[str, Any]]:
-    """Suppress overlapping train boxes while keeping distinct locomotives."""
+    """Убирает перекрывающиеся боксы, не склеивая разные локомотивы."""
     ordered = sorted(trains, key=lambda row: float(row.get("conf", 0.0)), reverse=True)
     kept: list[dict[str, Any]] = []
     for candidate in ordered:

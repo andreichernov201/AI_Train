@@ -12,7 +12,7 @@ from .models import new_id, utc_now
 
 
 class _ClosingConnection(sqlite3.Connection):
-    """Make the connection context manager close handles as well as commit."""
+    """После фиксации изменений закрывает соединение с базой."""
 
     def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> bool | None:
         try:

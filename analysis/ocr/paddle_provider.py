@@ -13,7 +13,7 @@ from .provider import OCRProvider
 
 
 class PaddleOCRProvider(OCRProvider):
-    """Thread-safe, lazy recognition-only PaddleOCR adapter."""
+    """Ленивая потокобезопасная обёртка PaddleOCR для распознавания."""
 
     model_name = "eslav_PP-OCRv5_mobile_rec"
 

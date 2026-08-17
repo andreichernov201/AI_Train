@@ -37,9 +37,9 @@ export function createEmptyBatchState() {
       editorMode: "review",
       /** "select" | "addBox" | "crop" | "addPolygon" */
       editorTool: "select",
-      /** Класс, который автоматически получит следующий новый Seg-полигон. */
+      /** Класс следующего полигона сегментации. */
       lastPolygonClassName: trainClassesForMode("segmentation")[0]?.name ?? "body",
-      /** Последний вариант из меню «Распознать»; основная кнопка всегда запускает both. */
+      /** Последний пункт меню «Распознать»; основная кнопка запускает обе модели. */
       runSelection: "both",
       /** Legacy: нужен только для миграции старых проектов. */
       inferenceMode: "detection",

@@ -1,4 +1,4 @@
-"""Modular railway photo and video analysis package."""
+"""Модули для анализа железнодорожных фото и видео."""
 
 from .models import AnalysisEvent, LocomotiveIdentity, OCRObservation, OCRResult
 

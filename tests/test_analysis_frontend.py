@@ -29,7 +29,7 @@ class AnalysisFrontendIntegrationTests(unittest.TestCase):
     def test_analysis_script_references_existing_elements(self) -> None:
         element_ids = set(re.findall(r'\bid="([^"]+)"', INDEX))
         required = set(re.findall(r'getElementById\("([^"]+)"\)', APP_JS))
-        # These two intentionally support the original markup through CSS fallbacks.
+        # Эти два элемента всё ещё поддерживаются через старые CSS-правила.
         required -= {"annotation-app", "annotation-header-progress"}
         self.assertEqual(sorted(required - element_ids), [])
 

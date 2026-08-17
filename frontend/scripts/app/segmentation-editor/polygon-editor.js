@@ -148,7 +148,7 @@ export function createPolygonEditor(deps) {
     deps.requestDraw();
   }
 
-  /** Update the class of an in-progress polygon without losing its points. */
+  /** Меняем класс черновика, не сбрасывая точки. */
   function setDraftTrainClass(trainClass) {
     if (!draft || !trainClass) return false;
     draft.trainClass = { id: trainClass.id, name: trainClass.name };

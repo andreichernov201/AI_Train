@@ -19,7 +19,7 @@
   user-select: none;
 }
 
-/* Author display rules must never override the viewer's active media state. */
+/* Общие стили не должны показывать неактивное фото или видео. */
 .analysis-viewer-surface > [hidden] {
   display: none !important;
 }
