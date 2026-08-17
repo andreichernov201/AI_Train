@@ -16,6 +16,7 @@ coverage.xml
 # Virtual environments
 venv/
 .venv/
+.venv-sam/
 ENV/
 env/
 
@@ -34,10 +35,10 @@ Desktop.ini
 .env.*
 
 # Logs
+*.log
+
 # Local analysis sessions, uploads, evidence and SQLite database
 analysis_data/
-
-*.log
 
 # Frontend deps (если появятся)
 node_modules/

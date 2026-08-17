@@ -5228,18 +5228,15 @@ export function startApp(refs) {
   function getTrainClassForNewBbox(im) {
     const type = batchState.settings.editorTool === "addPolygon" ? "seg" : "detect";
     const classes = classesForAnnotationType(type);
-    if (hotkeyPreferredNewBboxClassName) {
-      const hit = classes.find((t) => t.name === hotkeyPreferredNewBboxClassName);
-      if (hit) {
-        if (type === "seg") batchState.settings.lastPolygonClassName = hit.name;
-        return hit;
-      }
-    }
     if (type === "seg") {
       const remembered = classes.find(
         (t) => t.name === batchState.settings.lastPolygonClassName
       );
       if (remembered) return remembered;
+    }
+    if (hotkeyPreferredNewBboxClassName) {
+      const hit = classes.find((t) => t.name === hotkeyPreferredNewBboxClassName);
+      if (hit) return hit;
     }
     const sid = im.panel.selectedDetectionId;
     if (sid != null) {
@@ -7102,11 +7099,13 @@ export function startApp(refs) {
           batchState.settings.editorTool === "addBox" ||
           batchState.settings.editorTool === "addPolygon"
         ) {
-          hotkeyPreferredNewBboxClassName = tc.name;
           if (batchState.settings.editorTool === "addPolygon") {
             batchState.settings.lastPolygonClassName = tc.name;
+            polygonEditor.setDraftTrainClass(tc);
             touchBatch();
             scheduleWorkspaceAutosave(0);
+          } else {
+            hotkeyPreferredNewBboxClassName = tc.name;
           }
           e.preventDefault();
           return;

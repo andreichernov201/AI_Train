@@ -61,7 +61,7 @@ export function createPolygonEditor(deps) {
   let interaction = null;
 
   /** Черновик инструмента «Добавить полигон». */
-  let draft = /** @type {null | { points: Array<[number, number]>, cursor: [number, number] | null }} */ (
+  let draft = /** @type {null | { points: Array<[number, number]>, cursor: [number, number] | null, trainClass: { id: number, name: string } | null }} */ (
     null
   );
 
@@ -107,20 +107,22 @@ export function createPolygonEditor(deps) {
   function startAddPolygonDraft(geo, ox, oy) {
     const { ix, iy } = overlayToImagePoint(geo, ox, oy);
     const pt = clampPoint(geo, ix, iy);
-    draft = { points: [pt], cursor: pt };
+    const im = deps.getCurrentImage();
+    const trainClass = im ? deps.getNewShapeTrainClass(im) : null;
+    draft = { points: [pt], cursor: pt, trainClass };
     deps.requestDraw();
   }
 
   function finishAddPolygonDraft() {
     const im = deps.getCurrentImage();
     const pts = draft?.points ?? [];
+    const tc = draft?.trainClass ?? null;
     draft = null;
-    if (!im || pts.length < MIN_POLYGON_POINTS) {
+    if (!im || !tc || pts.length < MIN_POLYGON_POINTS) {
       deps.requestDraw();
       return;
     }
     deps.pushUndoCheckpoint();
-    const tc = deps.getNewShapeTrainClass(im);
     const segment = pts.map((p) => [p[0], p[1]]);
     const newDet = {
       id: deps.allocateNextDetId(im),
@@ -144,6 +146,14 @@ export function createPolygonEditor(deps) {
     deps.updateBatchNavUi();
     deps.buildRightPanel();
     deps.requestDraw();
+  }
+
+  /** Update the class of an in-progress polygon without losing its points. */
+  function setDraftTrainClass(trainClass) {
+    if (!draft || !trainClass) return false;
+    draft.trainClass = { id: trainClass.id, name: trainClass.name };
+    deps.requestDraw();
+    return true;
   }
 
   function handleAddPolygonPointerDown(geo, ox, oy, e) {
@@ -526,6 +536,7 @@ export function createPolygonEditor(deps) {
     setSimplifyPreview,
     clearSimplifyPreview,
     applySimplify,
+    setDraftTrainClass,
     simplifyPolygonRDP,
     MIN_POLYGON_POINTS,
   };
